@@ -1,4 +1,6 @@
+import dataclasses
 import enum
+import functools
 
 import PIL.Image
 
@@ -8,19 +10,36 @@ import lightleak.camera
 import lightleak.imageview
 
 
+SETTINGS = {
+    '/main/imgsettings/imageformat': 'Format',
+    '/main/imgsettings/iso': 'ISO',
+    '/main/imgsettings/whitebalance': 'White Balance',
+    '/main/capturesettings/aperture': 'Aperture',
+    '/main/capturesettings/shutterspeed': 'Exposure',
+}
+
+
 class CameraWorker(QtCore.QObject):
     class State(enum.StrEnum):
         DISCONNECTED = enum.auto()
         READY = enum.auto()
         BUSY = enum.auto()
 
+    @dataclasses.dataclass
+    class ConfigChange:
+        name: str
+        value: str
+        choices: list[str]
+
     state_changed = QtCore.Signal(State)
     error = QtCore.Signal(str)
+    config_changed = QtCore.Signal(ConfigChange)
 
     def __init__(self):
         super().__init__()
 
         self._cam = None
+        self._configs = {}
 
         self._thread = QtCore.QThread()
         self.moveToThread(self._thread)
@@ -37,6 +56,7 @@ class CameraWorker(QtCore.QObject):
             except Exception:
                 pass
             self._cam = None
+            self._configs = {}
             self.state_changed.emit(self.State.DISCONNECTED)
 
     @property
@@ -66,7 +86,18 @@ class CameraWorker(QtCore.QObject):
             self.state_changed.emit(self.State.DISCONNECTED)
             self.error.emit(f'Failed to open camera: {e}')
         else:
+            for name in SETTINGS:
+                c = self._cam.get_config(name)
+                self.config_changed.emit(
+                    self.ConfigChange(name, c.value, c.choices))
+                self._configs[name] = c
             self.state_changed.emit(self.State.READY)
+
+    @QtCore.Slot(str, str)
+    def set_config(self, name, value):
+        if self._cam and self._configs:
+            c = self._configs[name]
+            c.set(value)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -93,8 +124,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._connect = QtWidgets.QPushButton('Connect')
         left_panel.addWidget(self._connect)
+        left_panel.addSpacing(20)
+        self._settings = {}
+        for name, label in SETTINGS.items():
+            qlabel = QtWidgets.QLabel(label)
+            combo = QtWidgets.QComboBox()
+            combo.currentTextChanged.connect(
+                functools.partial(self.setting_changed, name))
+            left_panel.addWidget(qlabel)
+            left_panel.addWidget(combo)
+            self._settings[name] = (qlabel, combo)
         left_panel.addStretch()
-        left_panel.addWidget(QtWidgets.QLabel('left'))
 
         right_panel.addWidget(QtWidgets.QLabel('right'))
 
@@ -103,22 +143,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(root)
 
         self._worker = CameraWorker()
-        self._worker.state_changed.connect(self.state_changed)
+        self._worker.state_changed.connect(self.worker_state_changed)
         self._worker.error.connect(self.worker_error)
+        self._worker.config_changed.connect(self.worker_config_changed)
         self._connect.clicked.connect(self._worker.connect)
-        self.state_changed(CameraWorker.State.DISCONNECTED)
+        self.worker_state_changed(CameraWorker.State.DISCONNECTED)
 
     def closeEvent(self, event):
         self._worker.stop()
 
     @QtCore.Slot(CameraWorker.State)
-    def state_changed(self, state):
+    def worker_state_changed(self, state):
         if state == CameraWorker.State.DISCONNECTED:
             self._connected = False
             self._status.showMessage(f'Camera disconnected.')
             self._connect.setText('Connect')
+            for label, combo in self._settings.values():
+                label.setEnabled(False)
+                combo.setEnabled(False)
         elif state == CameraWorker.State.BUSY:
             self._connect.setText('Disconnect')
+            for label, combo in self._settings.values():
+                label.setEnabled(False)
+                combo.setEnabled(False)
         elif state == CameraWorker.State.READY:
             if not self._connected:
                 name = self._worker.name
@@ -126,10 +173,25 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._status.showMessage(f'Connected to {name} on {port}.')
             self._connected = True
             self._connect.setText('Disconnect')
+            for label, combo in self._settings.values():
+                label.setEnabled(True)
+                combo.setEnabled(True)
 
     @QtCore.Slot(str)
     def worker_error(self, error):
         QtWidgets.QMessageBox.critical(self, 'Camera Error', error)
+
+    @QtCore.Slot(CameraWorker.ConfigChange)
+    def worker_config_changed(self, change):
+        _, combo = self._settings[change.name]
+        combo.clear()
+        combo.addItems(change.choices)
+        combo.setCurrentText(change.value)
+
+    def setting_changed(self, name, value):
+        if not self._connected:
+            return
+        self._worker.set_config(name, value)
 
 
 def interact():
