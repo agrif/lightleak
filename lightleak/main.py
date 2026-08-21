@@ -50,7 +50,7 @@ def interact():
     readline.set_completer(rlcompleter.Completer(local).complete)
     readline.parse_and_bind('tab: complete')
 
-    with lightleak.Camera.default() as cam:
+    with lightleak.camera.Camera.default() as cam:
         local['cam'] = cam
         code.interact(local=local)
 
