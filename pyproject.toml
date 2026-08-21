@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-lightleak = 'lightleak:main'
+lightleak = 'lightleak.main:main'
 
 [tool.uv.build-backend]
 module-root = ''
