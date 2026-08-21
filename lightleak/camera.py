@@ -75,9 +75,16 @@ class Camera:
         try:
             return self._configs[normal]
         except KeyError:
-            config = Config(normal, self._cam, self._window, widget)
-            self._configs[normal] = config
-            return config
+            pass
+
+        classes = {
+            gphoto2.GP_WIDGET_RADIO: ConfigRadio,
+        }
+
+        cls = classes.get(widget.get_type(), Config)
+        config = cls(normal, self._cam, self._window, widget)
+        self._configs[normal] = config
+        return config
 
     def get_summary(self):
         return self._cam.get_summary().text
@@ -126,3 +133,18 @@ class Config:
 
     def reset(self):
         self.set(self._initial)
+
+
+class ConfigRadio(Config):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self._choices = list(self._widget.get_choices())
+
+    @property
+    def choices(self):
+        return self._choices
+
+    def set(self, val):
+        if not val in self._choices:
+            raise ValueError(f'value {val!r} not valid for {self._name}')
+        super().set(val)
