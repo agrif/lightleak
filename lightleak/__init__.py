@@ -138,7 +138,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle('scanner.py')
+        self.setWindowTitle('lightleak')
         self.setMinimumSize(640, 480)
 
         status = QtWidgets.QStatusBar(self)

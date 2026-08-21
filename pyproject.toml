@@ -3,13 +3,13 @@ requires = ['uv_build >= 0.11.21, <0.12.0']
 build-backend = 'uv_build'
 
 [project]
-name = 'scanner'
+name = 'lightleak'
 version = '0.1.0'
 description = 'Film scanner tool.'
 readme = 'README.md'
 license = 'MIT'
 license-files = ['LICENSE']
-urls.Source = 'https://github.com/agrif/scanner/'
+urls.Source = 'https://github.com/agrif/lightleak/'
 
 authors = [
     {name = 'Aaron Griffith', email = 'aargri@gmail.com'},
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-scanner = 'scanner:main'
+lightleak = 'lightleak:main'
 
 [tool.uv.build-backend]
 module-root = ''

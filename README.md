@@ -1,4 +1,4 @@
-# scanner
+# lightleak
 
 Film scanner tool.
 
@@ -9,7 +9,7 @@ Create a `venv`, install, and run:
 ```console
 $ python -m venv virtualenv/ && . virtualenv/bin/activate
 $ pip install -e .
-$ scanner
+$ lightleak
 ```
 
 ## License
