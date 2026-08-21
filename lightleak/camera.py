@@ -1,3 +1,6 @@
+import subprocess
+import time
+
 import gphoto2
 
 
@@ -6,11 +9,36 @@ class Camera:
         self._cam = cam
 
     def __enter__(self):
-        self._cam.init()
+        self.open()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._cam:
+            self.close()
+
+    def open(self):
+        try:
+            self._cam.init()
+            return
+        except gphoto2.GPhoto2Error:
+            pass
+
+        # try to unmount gphoto2 and try again
+        try:
+            subprocess.run(
+                ['gio', 'mount', '-s', 'gphoto2'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(1)
+        except Exception:
+            pass
+
+        self._cam.init()
+
+    def close(self):
         self._cam.exit()
+        self._cam = None
 
     @classmethod
     def default(cls):
