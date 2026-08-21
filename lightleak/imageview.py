@@ -57,6 +57,8 @@ class ImageView(QtWidgets.QGraphicsView):
         self.scale(factor, factor)
 
     def set_image(self, im):
+        had_image = self._has_image
+
         if im:
             qtim = PIL.ImageQt.ImageQt(im)
             pixmap = QtGui.QPixmap.fromImage(qtim)
@@ -69,8 +71,9 @@ class ImageView(QtWidgets.QGraphicsView):
             self._has_image = False
             self._image.setPixmap(QtGui.QPixmap())
 
-        self._zoom = 0
-        self.set_scale(1)
+        if not had_image:
+            self._zoom = 0
+            self.set_scale(1)
 
     def wheelEvent(self, event):
         delta = event.angleDelta().y()

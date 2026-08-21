@@ -1,7 +1,10 @@
+import io
 import subprocess
 import time
 
 import gphoto2
+import PIL.Image
+import rawpy
 
 
 class Camera:
@@ -103,7 +106,14 @@ class Camera:
                                gphoto2.GP_FILE_TYPE_NORMAL)
         data = f.get_data_and_size().tobytes()
         self._cam.file_delete(path.folder, path.name)
-        return data
+
+        # FIXME non-raw
+        with io.BytesIO(data) as f:
+            im = rawpy.imread(f)
+        # FIXME 16-bit
+        pixels = im.postprocess(output_bps=8)
+
+        return PIL.Image.fromarray(pixels)
 
 
 class Config:

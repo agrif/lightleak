@@ -34,6 +34,7 @@ class CameraWorker(QtCore.QObject):
     state_changed = QtCore.Signal(State)
     error = QtCore.Signal(str)
     config_changed = QtCore.Signal(ConfigChange)
+    captured = QtCore.Signal(PIL.Image.Image)
 
     def __init__(self):
         super().__init__()
@@ -99,6 +100,14 @@ class CameraWorker(QtCore.QObject):
             c = self._configs[name]
             c.set(value)
 
+    @QtCore.Slot()
+    def capture(self):
+        if self._cam:
+            self.state_changed.emit(self.State.BUSY)
+            im = self._cam.capture()
+            self.state_changed.emit(self.State.READY)
+            self.captured.emit(im)
+
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -115,11 +124,10 @@ class MainWindow(QtWidgets.QMainWindow):
         panels = QtWidgets.QHBoxLayout()
         left_panel = QtWidgets.QVBoxLayout()
         right_panel = QtWidgets.QVBoxLayout()
-        image = lightleak.imageview.ImageView()
-        image.set_image(PIL.Image.open('output.png'))
+        self._imageview = lightleak.imageview.ImageView()
 
         panels.addLayout(left_panel)
-        panels.addWidget(image)
+        panels.addWidget(self._imageview)
         panels.addLayout(right_panel)
 
         self._connect = QtWidgets.QPushButton('Connect')
@@ -135,8 +143,10 @@ class MainWindow(QtWidgets.QMainWindow):
             left_panel.addWidget(combo)
             self._settings[name] = (qlabel, combo)
         left_panel.addStretch()
+        self._capture = QtWidgets.QPushButton('Capture')
+        left_panel.addWidget(self._capture)
 
-        right_panel.addWidget(QtWidgets.QLabel('right'))
+        #right_panel.addWidget(QtWidgets.QLabel('right'))
 
         root = QtWidgets.QWidget()
         root.setLayout(panels)
@@ -146,7 +156,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.state_changed.connect(self.worker_state_changed)
         self._worker.error.connect(self.worker_error)
         self._worker.config_changed.connect(self.worker_config_changed)
+        self._worker.captured.connect(self.worker_captured)
         self._connect.clicked.connect(self._worker.connect)
+        self._capture.clicked.connect(self._worker.capture)
         self.worker_state_changed(CameraWorker.State.DISCONNECTED)
 
     def closeEvent(self, event):
@@ -158,11 +170,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self._connected = False
             self._status.showMessage(f'Camera disconnected.')
             self._connect.setText('Connect')
+            self._capture.setEnabled(False)
             for label, combo in self._settings.values():
                 label.setEnabled(False)
                 combo.setEnabled(False)
         elif state == CameraWorker.State.BUSY:
             self._connect.setText('Disconnect')
+            self._capture.setEnabled(False)
             for label, combo in self._settings.values():
                 label.setEnabled(False)
                 combo.setEnabled(False)
@@ -173,6 +187,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._status.showMessage(f'Connected to {name} on {port}.')
             self._connected = True
             self._connect.setText('Disconnect')
+            self._capture.setEnabled(True)
             for label, combo in self._settings.values():
                 label.setEnabled(True)
                 combo.setEnabled(True)
@@ -192,6 +207,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self._connected:
             return
         self._worker.set_config(name, value)
+
+    @QtCore.Slot(PIL.Image.Image)
+    def worker_captured(self, im):
+        self._imageview.set_image(im)
 
 
 def interact():
