@@ -7,6 +7,8 @@ import gphoto2
 class Camera:
     def __init__(self, cam: gphoto2.Camera):
         self._cam = cam
+        self._window = None
+        self._configs = {}
 
     def __enter__(self):
         self.open()
@@ -19,8 +21,9 @@ class Camera:
     def open(self):
         try:
             self._cam.init()
+            self._window = self._cam.get_config()
             return
-        except gphoto2.GPhoto2Error:
+        except gphoto2.GPhoto2Error as e:
             pass
 
         # try to unmount gphoto2 and try again
@@ -35,8 +38,14 @@ class Camera:
             pass
 
         self._cam.init()
+        self._window = self._cam.get_config()
 
     def close(self):
+        for v in self._configs.values():
+            v.reset()
+        self._configs = {}
+        self._window = None
+
         self._cam.exit()
         self._cam = None
 
@@ -44,14 +53,31 @@ class Camera:
     def default(cls):
         return cls(gphoto2.Camera())
 
-    def _get_config(self, name):
-        widget = self._cam.get_config()
-        for part in name.split('/'):
+    def get_config(self, name):
+        if self._window is None:
+            raise RuntimeError('camera not opened')
+
+        widget = self._window
+        parts = name.split('/')
+        for part in parts:
             if not part:
                 continue
             widget = widget.get_child_by_name(part)
 
-        return widget.get_value()
+        parts = []
+        w = widget
+        while w is not None:
+            parts.append(w.get_name())
+            w = w.get_parent()
+        parts.reverse()
+        normal = '/' + '/'.join(parts)
+
+        try:
+            return self._configs[normal]
+        except KeyError:
+            config = Config(normal, self._cam, self._window, widget)
+            self._configs[normal] = config
+            return config
 
     def get_summary(self):
         return self._cam.get_summary().text
@@ -71,3 +97,32 @@ class Camera:
         data = f.get_data_and_size().tobytes()
         self._cam.file_delete(path.folder, path.name)
         return data
+
+
+class Config:
+    def __init__(self, name, cam, window, widget):
+        self._name = name
+        self._cam = cam
+        self._window = window
+        self._widget = widget
+        self._value = widget.get_value()
+        self._initial = self._value
+        self._readonly = bool(widget.get_readonly())
+
+    @property
+    def readonly(self):
+        return self._readonly
+
+    @property
+    def value(self):
+        return self._value
+
+    def set(self, val):
+        if self._readonly:
+            raise ValueError(f'config {self._name} is read only')
+        self._widget.set_value(val)
+        self._cam.set_config(self._window)
+        self._value = self._widget.get_value()
+
+    def reset(self):
+        self.set(self._initial)
