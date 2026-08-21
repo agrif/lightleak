@@ -1,14 +1,3 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.13"
-# dependencies = [
-#     "gphoto2~=2.6",
-#     "pillow~=12.3",
-#     "PySide6~=6.11",
-#     "rawpy~=0.27.0",
-# ]
-# ///
-
 import sys
 
 import gphoto2
