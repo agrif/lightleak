@@ -56,6 +56,14 @@ class Camera:
     def get_summary(self):
         return self._cam.get_summary().text
 
+    @property
+    def name(self):
+        return self._cam.get_abilities().model
+
+    @property
+    def port(self):
+        return self._cam.get_port_info().get_path()
+
     def capture(self):
         path = self._cam.capture(gphoto2.GP_CAPTURE_IMAGE)
         f = self._cam.file_get(path.folder, path.name,

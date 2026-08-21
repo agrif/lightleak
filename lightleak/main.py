@@ -39,6 +39,18 @@ class CameraWorker(QtCore.QObject):
             self._cam = None
             self.state_changed.emit(self.State.DISCONNECTED)
 
+    @property
+    def name(self):
+        if self._cam:
+            return self._cam.name
+        return '<none>'
+
+    @property
+    def port(self):
+        if self._cam:
+            return self._cam.port
+        return '<none>'
+
     @QtCore.Slot()
     def connect(self):
         if self._cam:
@@ -60,6 +72,8 @@ class CameraWorker(QtCore.QObject):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
+
+        self._connected = False
 
         self.setWindowTitle('lightleak')
         self.setMinimumSize(640, 480)
@@ -99,12 +113,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot(CameraWorker.State)
     def state_changed(self, state):
-        self._status.showMessage(f'camera {state}')
         if state == CameraWorker.State.DISCONNECTED:
+            self._connected = False
+            self._status.showMessage(f'Camera disconnected.')
             self._connect.setText('Connect')
         elif state == CameraWorker.State.BUSY:
             self._connect.setText('Disconnect')
         elif state == CameraWorker.State.READY:
+            if not self._connected:
+                name = self._worker.name
+                port = self._worker.port
+                self._status.showMessage(f'Connected to {name} on {port}.')
+            self._connected = True
             self._connect.setText('Disconnect')
 
     @QtCore.Slot(str)
