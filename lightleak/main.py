@@ -7,15 +7,26 @@ import PIL.Image
 from PySide6 import QtCore, QtWidgets
 
 import lightleak.camera
+import lightleak.combospinbox
 import lightleak.imageview
 
 
 SETTINGS = {
-    '/main/imgsettings/imageformat': 'Format',
-    '/main/imgsettings/iso': 'ISO',
-    '/main/imgsettings/whitebalance': 'White Balance',
-    '/main/capturesettings/aperture': 'Aperture',
-    '/main/capturesettings/shutterspeed': 'Exposure',
+    '/main/imgsettings/imageformat': (
+        'Format', QtWidgets.QComboBox,
+    ),
+    '/main/imgsettings/whitebalance': (
+        'White Balance', QtWidgets.QComboBox,
+    ),
+    '/main/imgsettings/iso': (
+        'ISO', lightleak.combospinbox.ComboSpinBox,
+    ),
+    '/main/capturesettings/aperture': (
+        'Aperture', lightleak.combospinbox.ComboSpinBox,
+    ),
+    '/main/capturesettings/shutterspeed': (
+        'Exposure', lightleak.combospinbox.ComboSpinBox,
+    ),
 }
 
 
@@ -143,9 +154,9 @@ class MainWindow(QtWidgets.QMainWindow):
         left_panel.addWidget(self._connect_button)
         left_panel.addSpacing(20)
         self._settings = {}
-        for name, label in SETTINGS.items():
+        for name, (label, widget) in SETTINGS.items():
             qlabel = QtWidgets.QLabel(label)
-            combo = QtWidgets.QComboBox()
+            combo = widget()
             combo.currentTextChanged.connect(
                 functools.partial(self.setting_changed, name))
             left_panel.addWidget(qlabel)
