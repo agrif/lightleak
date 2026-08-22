@@ -104,9 +104,14 @@ class CameraWorker(QtCore.QObject):
     def capture(self):
         if self._cam:
             self.state_changed.emit(self.State.BUSY)
-            cap = self._cam.capture()
-            self.state_changed.emit(self.State.READY)
-            self.captured.emit(cap)
+            try:
+                cap = self._cam.capture()
+            except Exception as e:
+                self.error.emit(f'Failed to capture frame: {e}')
+                self.state_changed.emit(self.State.READY)
+            else:
+                self.state_changed.emit(self.State.READY)
+                self.captured.emit(cap)
 
 
 class MainWindow(QtWidgets.QMainWindow):
