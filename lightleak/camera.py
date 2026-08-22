@@ -3,7 +3,9 @@ import subprocess
 import time
 
 import gphoto2
+import numpy
 import PIL.Image
+import PIL.ImageFilter
 import rawpy
 
 
@@ -107,13 +109,50 @@ class Camera:
         data = f.get_data_and_size().tobytes()
         self._cam.file_delete(path.folder, path.name)
 
+        return Capture(data)
+
+
+class Capture:
+    def __init__(self, data):
+        self._data = data
+
         # FIXME non-raw
         with io.BytesIO(data) as f:
-            im = rawpy.imread(f)
-        # FIXME 16-bit
-        pixels = im.postprocess(output_bps=8)
+            raw = rawpy.imread(f)
 
-        return PIL.Image.fromarray(pixels)
+        self._pixels = raw.postprocess(output_bps=16)
+        pixels8 = (self._pixels >> 8).astype(numpy.uint8)
+
+        self._preview = PIL.Image.fromarray(pixels8)
+
+        satpixels = raw.raw_image_visible
+        if satpixels.ndim > 2:
+            satpixels = numpy.max(satpixels, axis=-1)
+        pixels8[satpixels >= raw.white_level] = [255, 0, 0]
+        self._clipped = PIL.Image.fromarray(pixels8)
+
+        self._focus = self._preview.convert('L').filter(
+            PIL.ImageFilter.FIND_EDGES)
+
+    @property
+    def data(self):
+        return self._data
+
+    @property
+    def pixels(self):
+        return self._pixels
+
+    @property
+    def preview(self):
+        return self._preview
+
+    @property
+    def clipped(self):
+        return self._clipped
+
+    @property
+    def focus(self):
+        return self._focus
 
 
 class Config:
