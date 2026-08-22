@@ -115,6 +115,8 @@ class CameraWorker(QtCore.QObject):
 
 
 class MainWindow(QtWidgets.QMainWindow):
+    change_setting = QtCore.Signal(str, str)
+
     def __init__(self):
         super().__init__()
 
@@ -181,6 +183,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.captured.connect(self.worker_captured)
         self._connect_button.clicked.connect(self._worker.connect)
         self._capture_button.clicked.connect(self._worker.capture)
+        self.change_setting.connect(self._worker.set_config)
         self.worker_state_changed(CameraWorker.State.DISCONNECTED)
 
     def closeEvent(self, event):
@@ -228,7 +231,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def setting_changed(self, name, value):
         if not self._connected:
             return
-        self._worker.set_config(name, value)
+        self.change_setting.emit(name, value)
 
     @QtCore.Slot(PIL.Image.Image)
     def worker_captured(self, capture):
