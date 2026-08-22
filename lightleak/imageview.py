@@ -33,7 +33,7 @@ class ImageView(QtWidgets.QGraphicsView):
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
         )
 
-        self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(50, 50, 50)))
+        self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(20, 20, 20)))
         self.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
 
     def set_scale(self, scale):
