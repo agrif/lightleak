@@ -134,7 +134,7 @@ class Capture:
         try:
             with io.BytesIO(self._data) as f:
                 raw = rawpy.imread(f)
-                pixels = raw.postprocess(output_bps=16)
+                pixels = raw.postprocess(output_bps=16, user_flip=0)
                 satpixels = raw.raw_image_visible
                 white_level = raw.white_level
             return (pixels, satpixels, white_level)
