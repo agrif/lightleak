@@ -9,23 +9,45 @@ from PySide6 import QtCore, QtWidgets
 import lightleak.camera
 import lightleak.ui
 
-SETTINGS = {
-    '/main/imgsettings/imageformat': (
-        'Format', QtWidgets.QComboBox,
+@dataclasses.dataclass
+class Setting:
+    name: str
+    label: str
+    spin: bool = False
+    reverse: bool = False
+
+    widgets: list[QtWidgets.QWidget] = dataclasses.field(default_factory=list)
+
+    def with_widgets(self, widgets):
+        return dataclasses.replace(self, widgets=widgets)
+
+
+SETTINGS = [
+    Setting(
+        name='/main/imgsettings/imageformat',
+        label='Format',
     ),
-    '/main/imgsettings/whitebalance': (
-        'White Balance', QtWidgets.QComboBox,
+    Setting(
+        name='/main/imgsettings/whitebalance',
+        label='White Balance',
     ),
-    '/main/imgsettings/iso': (
-        'ISO', lambda: lightleak.ui.ComboSpinBox(),
+    Setting(
+        name='/main/imgsettings/iso',
+        label='ISO',
+        spin=True,
     ),
-    '/main/capturesettings/aperture': (
-        'Aperture', lambda: lightleak.ui.ComboSpinBox(),
+    Setting(
+        name='/main/capturesettings/aperture',
+        label='Aperture',
+        spin=True,
     ),
-    '/main/capturesettings/shutterspeed': (
-        'Exposure', lambda: lightleak.ui.ComboSpinBox(),
+    Setting(
+        name='/main/capturesettings/shutterspeed',
+        label='Exposure',
+        spin=True,
+        reverse=True,
     ),
-}
+]
 
 
 class CameraWorker(QtCore.QObject):
@@ -96,11 +118,11 @@ class CameraWorker(QtCore.QObject):
             self.state_changed.emit(self.State.DISCONNECTED)
             self.error.emit(f'Failed to open camera: {e}')
         else:
-            for name in SETTINGS:
-                c = self._cam.get_config(name)
+            for setting in SETTINGS:
+                c = self._cam.get_config(setting.name)
                 self.setting_changed.emit(
-                    self.SettingChange(name, c.value, c.choices))
-                self._configs[name] = c
+                    self.SettingChange(setting.name, c.value, c.choices))
+                self._configs[setting.name] = c
             self.state_changed.emit(self.State.READY)
 
     @QtCore.Slot(str, str)
@@ -143,14 +165,17 @@ class CapturePanel(QtWidgets.QWidget):
         layout.addWidget(self._connect_button)
         layout.addSpacing(20)
         self._settings = {}
-        for name, (label, widget) in SETTINGS.items():
-            qlabel = QtWidgets.QLabel(label)
-            combo = widget()
+        for setting in SETTINGS:
+            label = QtWidgets.QLabel(setting.label)
+            if setting.spin:
+                combo = lightleak.ui.ComboSpinBox()
+            else:
+                combo = QtWidgets.QComboBox()
             combo.currentTextChanged.connect(
-                functools.partial(self._set_setting, name))
-            layout.addWidget(qlabel)
+                functools.partial(self._set_setting, setting.name))
+            layout.addWidget(label)
             layout.addWidget(combo)
-            self._settings[name] = (qlabel, combo)
+            self._settings[setting.name] = setting.with_widgets([label, combo])
         layout.addStretch()
         self._capture_button = QtWidgets.QPushButton('Capture')
         layout.addWidget(self._capture_button)
@@ -176,15 +201,15 @@ class CapturePanel(QtWidgets.QWidget):
             self._status_bar.showMessage(f'Camera disconnected.')
             self._connect_button.setText('Connect')
             self._capture_button.setEnabled(False)
-            for label, combo in self._settings.values():
-                label.setEnabled(False)
-                combo.setEnabled(False)
+            for setting in self._settings.values():
+                for widget in setting.widgets:
+                    widget.setEnabled(False)
         elif state == CameraWorker.State.BUSY:
             self._connect_button.setText('Disconnect')
             self._capture_button.setEnabled(False)
-            for label, combo in self._settings.values():
-                label.setEnabled(False)
-                combo.setEnabled(False)
+            for setting in self._settings.values():
+                for widget in setting.widgets:
+                    widget.setEnabled(False)
         elif state == CameraWorker.State.READY:
             if not self._connected:
                 name = self._worker.name
@@ -193,9 +218,9 @@ class CapturePanel(QtWidgets.QWidget):
             self._connected = True
             self._connect_button.setText('Disconnect')
             self._capture_button.setEnabled(True)
-            for label, combo in self._settings.values():
-                label.setEnabled(True)
-                combo.setEnabled(True)
+            for setting in self._settings.values():
+                for widget in setting.widgets:
+                    widget.setEnabled(True)
 
     @QtCore.Slot(str)
     def _error(self, error):
@@ -204,9 +229,12 @@ class CapturePanel(QtWidgets.QWidget):
     @QtCore.Slot(CameraWorker.SettingChange)
     def _setting_changed(self, change):
         # called by camera on change
-        _, combo = self._settings[change.name]
-        combo.clear()
-        combo.addItems(change.choices)
+        setting = self._settings[change.name]
+        combo = setting.widgets[-1]
+        if setting.reverse:
+            combo.addItems(reversed(change.choices))
+        else:
+            combo.addItems(change.choices)
         combo.setCurrentText(change.value)
 
     def _set_setting(self, name, value):
