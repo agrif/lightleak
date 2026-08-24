@@ -116,6 +116,9 @@ class Capture:
     def __init__(self, data):
         self._data = data
 
+        with open('capture.cr2', 'wb') as f:
+            f.write(data)
+
         self._pixels, satpixels, white_level = self._load_image()
         shift = 8 * (self._pixels.dtype.itemsize - 1)
         pixels8 = (self._pixels >> shift).astype(numpy.uint8)
