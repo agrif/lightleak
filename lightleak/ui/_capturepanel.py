@@ -7,6 +7,7 @@ import PIL.Image
 from PySide6 import QtCore, QtWidgets
 
 import lightleak.camera
+import lightleak.image
 import lightleak.ui
 
 @dataclasses.dataclass
@@ -65,7 +66,7 @@ class CameraWorker(QtCore.QObject):
     state_changed = QtCore.Signal(State)
     error = QtCore.Signal(str)
     setting_changed = QtCore.Signal(SettingChange)
-    captured = QtCore.Signal(PIL.Image.Image)
+    captured = QtCore.Signal(lightleak.image.Image)
 
     def __init__(self):
         super().__init__()

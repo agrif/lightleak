@@ -1,3 +1,4 @@
+import PIL.Image
 import PIL.ImageQt
 
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -56,6 +57,7 @@ class ImageView(QtWidgets.QGraphicsView):
         factor *= scale
         self.scale(factor, factor)
 
+    @QtCore.Slot(PIL.Image.Image)
     def set_image(self, im):
         had_image = self._has_image
 
