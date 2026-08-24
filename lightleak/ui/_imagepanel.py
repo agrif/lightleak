@@ -1,10 +1,34 @@
+import dataclasses
 import functools
+import typing
 
 import PIL.Image
 
 from PySide6 import QtCore, QtWidgets
 
 import lightleak.image
+
+
+@dataclasses.dataclass
+class ImageType:
+    label: str
+    get: typing.Callable[[lightleak.image.Image], PIL.Image.Image]
+
+
+IMAGE_TYPES = [
+    ImageType(
+        label='Base',
+        get=lambda im: im.preview,
+    ),
+    ImageType(
+        label='Clip',
+        get=lambda im: im.clipped,
+    ),
+    ImageType(
+        label='Focus',
+        get=lambda im: im.focus,
+    ),
+]
 
 
 class ImagePanel(QtWidgets.QWidget):
@@ -14,39 +38,36 @@ class ImagePanel(QtWidgets.QWidget):
         super().__init__()
 
         self._image = None
-        self._display_attr = 'preview'
+        self._image_type = IMAGE_TYPES[0]
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
 
         display_box = QtWidgets.QGroupBox('Image Preview')
         layout.addWidget(display_box)
+
         display_layout = QtWidgets.QVBoxLayout()
         display_box.setLayout(display_layout)
-        display_types = {
-            'preview': 'Base',
-            'clipped': 'Clip',
-            'focus': 'Focus',
-        }
-        for i, (attr, name) in enumerate(display_types.items()):
-            radio = QtWidgets.QRadioButton(name)
-            if i == 0:
+        for ty in IMAGE_TYPES:
+            radio = QtWidgets.QRadioButton(ty.label)
+            if ty == self._image_type:
                 radio.setChecked(True)
             radio.toggled.connect(
-                functools.partial(self._set_display_attr, attr))
+                functools.partial(self._set_image_type, ty))
             display_layout.addWidget(radio)
+
         layout.addStretch()
 
-    def _set_display_attr(self, attr, checked):
+    def _set_image_type(self, ty, checked):
         if not checked:
             return
-        self._display_attr = attr
+        self._image_type = ty
 
         if not self._image:
             return
-        self.image_changed.emit(getattr(self._image, self._display_attr))
+        self.image_changed.emit(self._image_type.get(self._image))
 
     @QtCore.Slot(lightleak.image.Image)
     def set_image(self, image):
         self._image = image
-        self._set_display_attr(self._display_attr, True)
+        self._set_image_type(self._image_type, True)
