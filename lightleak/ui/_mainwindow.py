@@ -13,7 +13,9 @@ class MainWindow(QtWidgets.QMainWindow):
         status_bar = QtWidgets.QStatusBar(self)
         self.setStatusBar(status_bar)
 
-        self._capture_panel = lightleak.ui.CapturePanel(status_bar)
+        processor = lightleak.image.Processor()
+
+        self._capture_panel = lightleak.ui.CapturePanel(status_bar, processor)
         self._image_panel = lightleak.ui.ImagePanel()
         self._image_view = lightleak.ui.ImageView()
 

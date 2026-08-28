@@ -3,8 +3,6 @@ import time
 
 import gphoto2
 
-import lightleak.image
-
 
 class Camera:
     def __init__(self, cam: gphoto2.Camera):
@@ -106,7 +104,7 @@ class Camera:
         data = f.get_data_and_size().tobytes()
         self._cam.file_delete(path.folder, path.name)
 
-        return lightleak.image.Image(data)
+        return data
 
 
 class Config:

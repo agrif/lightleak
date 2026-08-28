@@ -68,9 +68,10 @@ class CameraWorker(QtCore.QObject):
     setting_changed = QtCore.Signal(SettingChange)
     captured = QtCore.Signal(lightleak.image.Image)
 
-    def __init__(self):
+    def __init__(self, processor):
         super().__init__()
 
+        self._processor = processor
         self._cam = None
         self._configs = {}
 
@@ -142,8 +143,9 @@ class CameraWorker(QtCore.QObject):
                 self.error.emit(f'Failed to capture frame: {e}')
                 self.state_changed.emit(self.State.READY)
             else:
+                im = self._processor.load_bytes(cap)
                 self.state_changed.emit(self.State.READY)
-                self.captured.emit(cap)
+                self.captured.emit(im)
 
 
 class CapturePanel(QtWidgets.QWidget):
@@ -153,7 +155,7 @@ class CapturePanel(QtWidgets.QWidget):
     def captured(self):
         return self._worker.captured
 
-    def __init__(self, status_bar):
+    def __init__(self, status_bar, processor):
         super().__init__()
 
         self._status_bar = status_bar
@@ -181,7 +183,7 @@ class CapturePanel(QtWidgets.QWidget):
         self._capture_button = QtWidgets.QPushButton('Capture')
         layout.addWidget(self._capture_button)
 
-        self._worker = CameraWorker()
+        self._worker = CameraWorker(processor)
 
         self._worker.state_changed.connect(self._state_changed)
         self._worker.error.connect(self._error)

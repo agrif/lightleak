@@ -1,3 +1,4 @@
+import functools
 import io
 
 import numpy
@@ -6,60 +7,104 @@ import PIL.ImageFilter
 import rawpy
 
 
-class Image:
-    def __init__(self, data):
-        self._data = data
+def _srgb_to_lin(srgb):
+    return numpy.where(
+        srgb <= 0.04045,
+        srgb * 0.0773993808,
+        pow(srgb * 0.9478672986 + 0.0521327014, 2.4),
+    )
 
-        with open('capture.cr2', 'wb') as f:
-            f.write(data)
 
-        self._pixels, satpixels, white_level = self._load_image()
-        shift = 8 * (self._pixels.dtype.itemsize - 1)
-        pixels8 = (self._pixels >> shift).astype(numpy.uint8)
+def _lin_to_srgb(lin):
+    return numpy.where(
+        lin <= 0.0031308,
+        lin * 12.92,
+        1.055 * pow(lin, 0.41666) - 0.055,
+    )
 
-        self._preview = PIL.Image.fromarray(pixels8)
 
-        if satpixels.ndim > 2:
+class Processor:
+    def __init__(self):
+        pass
+
+    def open(self, path):
+        with open(path, 'rb') as f:
+            return self.load(f)
+
+    def load_bytes(self, data):
+        with io.BytesIO(data) as f:
+            return self.load(f)
+
+    def load(self, f):
+        for loader in [self._load_raw, self._load_pillow]:
+            f.seek(0)
+            try:
+                linear, satpixels, whitebalance = loader(f)
+                break
+            except Exception:
+                continue
+        else:
+            raise RuntimeError('no loader for image')
+
+        return Image(linear, satpixels, whitebalance)
+
+    def _load_raw(self, f):
+        raw = rawpy.imread(f)
+        linear = raw.postprocess(
+            output_color=rawpy.ColorSpace.sRGB,
+            output_bps=16,
+            user_flip=0,
+            no_auto_scale=True,
+            no_auto_bright=True,
+            gamma=(1, 1),
+        )
+
+        satpixels = raw.raw_image_visible
+        white_level = raw.white_level
+
+        while satpixels.ndim > 2:
             satpixels = numpy.max(satpixels, axis=-1)
-        pixels8[satpixels >= white_level] = [255, 0, 0]
-        self._clipped = PIL.Image.fromarray(pixels8)
+        satpixels = satpixels >= white_level
 
-        self._focus = self._preview.convert('L').filter(
-            PIL.ImageFilter.FIND_EDGES)
+        return (linear / white_level, satpixels, raw.camera_whitebalance[:3])
 
-    def _load_image(self):
-        try:
-            with io.BytesIO(self._data) as f:
-                raw = rawpy.imread(f)
-                pixels = raw.postprocess(output_bps=16, user_flip=0)
-                satpixels = raw.raw_image_visible
-                white_level = raw.white_level
-            return (pixels, satpixels, white_level)
-        except rawpy.LibRawFileUnsupportedError:
-            pass
+    def _load_pillow(self, f):
+        im = PIL.Image.open(f)
+        srgbi = numpy.array(im.convert('RGB'))
+        satpixels = numpy.max(srgbi, axis=-1)
+        pixelmax = (1 << (8 * srgbi.dtype.itemsize)) - 1
+        satpixels = satpixels >= pixelmax
+        linear = _srgb_to_lin(srgbi / pixelmax)
 
-        im = PIL.Image.open(io.BytesIO(self._data))
-        pixels = numpy.array(im.convert('RGB'))
-        satpixels = pixels
-        white_level = (1 << (8 * pixels.dtype.itemsize)) - 1
-        return (pixels, satpixels, white_level)
+        return (linear, satpixels, numpy.array([1.0, 1.0, 1.0]))
 
-    @property
-    def data(self):
-        return self._data
 
-    @property
-    def pixels(self):
-        return self._pixels
+class Image:
+    def __init__(self, linear, satpixels, whitebalance):
+        self._linear = linear
+        self._satpixels = satpixels
+        self._whitebalance = whitebalance / numpy.max(whitebalance)
 
-    @property
+        # preload some properties
+        self.preview
+        self.clipped
+        self.focus
+
+    @functools.cached_property
     def preview(self):
-        return self._preview
+        lin = self._linear * self._whitebalance
+        lin /= numpy.percentile(lin, 99)
+        srgb = _lin_to_srgb(lin)
+        clipped = numpy.clip(srgb, 0.0, 1.0)
+        preview = numpy.round(255 * clipped).astype(numpy.uint8)
+        return PIL.Image.fromarray(preview)
 
-    @property
+    @functools.cached_property
     def clipped(self):
-        return self._clipped
+        clipped = numpy.array(self.preview)
+        clipped[self._satpixels] = [255, 0, 0]
+        return PIL.Image.fromarray(clipped)
 
-    @property
+    @functools.cached_property
     def focus(self):
-        return self._focus
+        return self.preview.convert('L').filter(PIL.ImageFilter.FIND_EDGES)
