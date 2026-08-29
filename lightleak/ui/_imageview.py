@@ -5,7 +5,8 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 
 class ImageView(QtWidgets.QGraphicsView):
-    scale_factor = 1.25
+    # per mouse wheel degree, wheels usually have detents at 15 deg
+    scale_factor = 1.25 ** (1 / 15)
 
     def __init__(self):
         super().__init__()
@@ -78,21 +79,21 @@ class ImageView(QtWidgets.QGraphicsView):
             self.set_scale(1)
 
     def wheelEvent(self, event):
-        delta = event.angleDelta().y()
-        if not delta:
+        step_per_degree = 8
+        step = event.angleDelta().y()
+        if not step:
             return
 
-        step = delta // abs(delta)
-        zoom = max(-10, self._zoom + int(step))
+        zoom = max(-10 * 15 * step_per_degree, self._zoom + int(step))
         if zoom == self._zoom:
             return
 
         self._zoom = zoom
         if zoom:
-            factor = self.scale_factor ** step
+            factor = self.scale_factor ** (step / step_per_degree)
             self.scale(factor, factor)
         else:
-            self.set_scale(self.scale_factor ** zoom)
+            self.set_scale(self.scale_factor ** (zoom / step_per_degree))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
