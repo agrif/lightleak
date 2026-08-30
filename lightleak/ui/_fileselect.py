@@ -202,7 +202,7 @@ class FileSelect(QtWidgets.QWidget):
     def _set_input_index(self, index):
         if index < 0:
             self._input_i = 0
-            self._input_changed.emit(None)
+            self.loaded.emit(None)
         else:
             self._input_i = index
             self._input_changed.emit(self._input_paths[self._input_i])
@@ -216,8 +216,7 @@ class FileSelect(QtWidgets.QWidget):
 
     @QtCore.Slot(lightleak.image.Image)
     def _image_loaded(self, im):
-        if im is not None:
-            self.input_busy.emit(False)
+        self.input_busy.emit(False)
 
     def step_input(self, step):
         if self._input_paths:
