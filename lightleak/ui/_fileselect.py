@@ -154,6 +154,7 @@ class FileSelect(QtWidgets.QWidget):
             self._output_i is not None and self._output_i > 0)
         self._output.right.setEnabled(
             bool(self._output_path) and self._output_i is not None)
+        self._output.name.setEnabled(bool(self._output_path))
         self._output.action.setEnabled(bool(self._output_path))
 
     def _open_input(self):
@@ -193,7 +194,7 @@ class FileSelect(QtWidgets.QWidget):
         self._set_enableds()
 
     def set_output(self, path):
-        path = pathlib.Path(path)
+        path = pathlib.Path(path).absolute()
         name = self._output.name.text()
         if path.is_file():
             name = path.stem
