@@ -47,6 +47,7 @@ class ImageWorker(QtCore.QObject):
 class FileSelect(QtWidgets.QWidget):
     _input_changed = QtCore.Signal(pathlib.Path)
     saved = QtCore.Signal(pathlib.Path)
+    input_busy = QtCore.Signal(bool)
 
     @property
     def loaded(self):
@@ -55,6 +56,7 @@ class FileSelect(QtWidgets.QWidget):
     def __init__(self, processor):
         super().__init__()
 
+        self._input_busy = False
         self._input_paths = []
         self._input_i = 0
 
@@ -94,12 +96,17 @@ class FileSelect(QtWidgets.QWidget):
         self._output.action.clicked.connect(self.save_output)
 
         self._input_changed.connect(self._worker.load_image)
+        self._worker.loaded.connect(self._image_loaded)
 
         self._set_enableds()
         self.set_output(pathlib.Path.cwd())
 
     def stop(self):
         self._worker.stop()
+
+    def set_input_busy(self, busy):
+        self._input_busy = busy
+        self._set_enableds()
 
     def _add_row(self, layout, row, combo=False):
 
@@ -144,13 +151,21 @@ class FileSelect(QtWidgets.QWidget):
         )
 
     def _set_enableds(self):
+        self._input.open.setEnabled(not self._input_busy)
         self._input.left.setEnabled(
-            bool(self._input_paths) and self._input_i > 0)
+            bool(self._input_paths) and
+            self._input_i > 0 and
+            not self._input_busy,
+        )
         self._input.right.setEnabled(
             bool(self._input_paths) and
-            self._input_i < len(self._input_paths) - 1)
-        self._input.name.setEnabled(bool(self._input_paths))
-        self._input.action.setEnabled(bool(self._input_paths))
+            self._input_i < len(self._input_paths) - 1 and
+            not self._input_busy,
+        )
+        self._input.name.setEnabled(
+            bool(self._input_paths) and not self._input_busy)
+        self._input.action.setEnabled(
+            bool(self._input_paths) and not self._input_busy)
 
         self._output.left.setEnabled(
             bool(self._output_path) and
@@ -158,7 +173,8 @@ class FileSelect(QtWidgets.QWidget):
         self._output.right.setEnabled(
             bool(self._output_path) and self._output_i is not None)
         self._output.name.setEnabled(bool(self._output_path))
-        self._output.action.setEnabled(bool(self._output_path))
+        self._output.action.setEnabled(
+            bool(self._output_path) and not self._input_busy)
 
     def _open_input(self):
         paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -188,12 +204,18 @@ class FileSelect(QtWidgets.QWidget):
         else:
             self._input_i = index
             self._input_changed.emit(self._input_paths[self._input_i])
+            self.input_busy.emit(True)
 
         self._set_enableds()
 
     def _reload_input(self):
         if self._input_paths:
             self._set_input_index(self._input.name.currentIndex())
+
+    @QtCore.Slot(lightleak.image.Image)
+    def _image_loaded(self, im):
+        if im is not None:
+            self.input_busy.emit(False)
 
     def step_input(self, step):
         if self._input_paths:

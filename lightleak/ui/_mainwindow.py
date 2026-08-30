@@ -21,8 +21,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._image_view = lightleak.ui.ImageView()
 
         self._capture_panel.captured.connect(self._image_panel.set_image)
+        self._capture_panel.input_busy.connect(self._input_busy)
         self._file_select.loaded.connect(self._image_panel.set_image)
         self._file_select.saved.connect(self._image_panel.save_image)
+        self._file_select.input_busy.connect(self._input_busy)
         self._image_panel.image_changed.connect(self._image_view.set_image)
 
         stack = QtWidgets.QVBoxLayout()
@@ -44,3 +46,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         self._capture_panel.stop()
         self._file_select.stop()
+
+    def _input_busy(self, busy):
+        self._capture_panel.set_input_busy(busy)
+        self._file_select.set_input_busy(busy)

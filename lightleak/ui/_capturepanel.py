@@ -54,6 +54,7 @@ SETTINGS = [
 class CameraWorker(QtCore.QObject):
     class State(enum.StrEnum):
         DISCONNECTED = enum.auto()
+        CONNECTING = enum.auto()
         READY = enum.auto()
         BUSY = enum.auto()
 
@@ -111,7 +112,7 @@ class CameraWorker(QtCore.QObject):
             self.reset()
             return
 
-        self.state_changed.emit(self.State.BUSY)
+        self.state_changed.emit(self.State.CONNECTING)
         try:
             self._cam = lightleak.camera.Camera.default()
             self._cam.open()
@@ -150,6 +151,7 @@ class CameraWorker(QtCore.QObject):
 
 class CapturePanel(QtWidgets.QWidget):
     _change_setting = QtCore.Signal(str, str)
+    input_busy = QtCore.Signal(bool)
 
     @property
     def captured(self):
@@ -160,6 +162,7 @@ class CapturePanel(QtWidgets.QWidget):
 
         self._status_bar = status_bar
         self._connected = False
+        self._input_busy = False
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
@@ -197,8 +200,14 @@ class CapturePanel(QtWidgets.QWidget):
     def stop(self):
         self._worker.stop()
 
+    def set_input_busy(self, busy):
+        self._input_busy = busy
+        self._capture_button.setEnabled(not busy and self._connected)
+
     @QtCore.Slot(CameraWorker.State)
     def _state_changed(self, state):
+        self.input_busy.emit(state == CameraWorker.State.BUSY)
+
         if state == CameraWorker.State.DISCONNECTED:
             self._connected = False
             self._status_bar.showMessage(f'Camera disconnected.')
@@ -207,7 +216,7 @@ class CapturePanel(QtWidgets.QWidget):
             for setting in self._settings.values():
                 for widget in setting.widgets:
                     widget.setEnabled(False)
-        elif state == CameraWorker.State.BUSY:
+        elif state in [CameraWorker.State.BUSY, CameraWorker.State.CONNECTING]:
             self._connect_button.setText('Disconnect')
             self._capture_button.setEnabled(False)
             for setting in self._settings.values():
@@ -220,7 +229,7 @@ class CapturePanel(QtWidgets.QWidget):
                 self._status_bar.showMessage(f'Connected to {name} on {port}.')
             self._connected = True
             self._connect_button.setText('Disconnect')
-            self._capture_button.setEnabled(True)
+            self._capture_button.setEnabled(not self._input_busy)
             for setting in self._settings.values():
                 for widget in setting.widgets:
                     widget.setEnabled(True)
