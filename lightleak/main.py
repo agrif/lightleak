@@ -1,3 +1,4 @@
+import pathlib
 import sys
 
 from PySide6 import QtCore, QtWidgets
@@ -25,13 +26,22 @@ def main():
     app.styleHints().setColorScheme(QtCore.Qt.ColorScheme.Dark)
 
     parser = QtCore.QCommandLineParser()
+    parser.addPositionalArgument(
+        'input', 'Open files as input.', '[input ...]')
     parser.addHelpOption()
 
-    opt_interact= QtCore.QCommandLineOption(
-        ['i', 'interact'],
-        'open an interactive REPL',
+    opt_interact = QtCore.QCommandLineOption(
+        ['interact'],
+        'Open an interactive REPL.',
     )
     parser.addOption(opt_interact)
+
+    opt_output = QtCore.QCommandLineOption(
+        ['o', 'output'],
+        'Use the specified output directory.',
+        'dir',
+    )
+    parser.addOption(opt_output)
 
     parser.process(app)
 
@@ -40,6 +50,11 @@ def main():
         return
 
     window = lightleak.ui.MainWindow()
+    window.set_input(parser.positionalArguments())
+    if parser.isSet(opt_output):
+        output = pathlib.Path(parser.value(opt_output))
+        output.mkdir(exist_ok=True)
+        window.set_output(parser.value(opt_output))
     window.show()
 
     app.exec()

@@ -43,6 +43,12 @@ class MainWindow(QtWidgets.QMainWindow):
         root.setLayout(stack)
         self.setCentralWidget(root)
 
+    def set_input(self, inputs):
+        self._file_select.set_input(inputs)
+
+    def set_output(self, output):
+        self._file_select.set_output(output)
+
     def closeEvent(self, event):
         self._capture_panel.stop()
         self._file_select.stop()
