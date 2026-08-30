@@ -1,0 +1,186 @@
+import dataclasses
+import functools
+import os
+import pathlib
+
+from PySide6 import QtCore, QtWidgets
+
+import lightleak.image
+
+
+@dataclasses.dataclass
+class Row:
+    open: QtWidgets.QPushButton
+    path: QtWidgets.QLineEdit
+    name: QtWidgets.QLineEdit
+    left: QtWidgets.QPushButton
+    right: QtWidgets.QPushButton
+    action: QtWidgets.QPushButton
+
+
+class ImageWorker(QtCore.QObject):
+    loaded = QtCore.Signal(lightleak.image.Image)
+
+    def __init__(self, processor):
+        super().__init__()
+
+        self._processor = processor
+
+        self._thread = QtCore.QThread()
+        self.moveToThread(self._thread)
+        self._thread.start()
+
+    def stop(self):
+        self._thread.quit()
+
+    @QtCore.Slot(pathlib.Path)
+    def load_image(self, path):
+        try:
+            im = self._processor.open(path)
+        except Exception:
+            self.loaded.emit(None)
+        else:
+            self.loaded.emit(im)
+
+
+class FileSelect(QtWidgets.QWidget):
+    _input_changed = QtCore.Signal(pathlib.Path)
+
+    @property
+    def loaded(self):
+        return self._worker.loaded
+
+    def __init__(self, processor):
+        super().__init__()
+
+        self._input_paths = []
+        self._input_i = 0
+
+        layout = QtWidgets.QGridLayout()
+        layout.setColumnStretch(1, 1)
+        self.setLayout(layout)
+
+        self._input = self._add_row(layout, 0)
+        self._output = self._add_row(layout, 1)
+        self._worker = ImageWorker(processor)
+
+        self._input.open.setText('Open Input')
+        self._input.action.setText('Load')
+        self._input.name.setDisabled(True)
+
+        self._output.open.setText('Open Output')
+        self._output.action.setText('Save')
+
+        self._input.open.clicked.connect(self._open_input)
+        self._input.left.clicked.connect(
+            functools.partial(self.step_input, -1))
+        self._input.right.clicked.connect(
+            functools.partial(self.step_input, 1))
+        self._input.action.clicked.connect(
+            functools.partial(self.step_input, 0))
+
+        self._output.open.clicked.connect(self._open_output)
+
+        self._input_changed.connect(self._worker.load_image)
+
+        self._set_enableds()
+        self.set_output(pathlib.Path.cwd())
+
+    def stop(self):
+        self._worker.stop()
+
+    def _add_row(self, layout, row):
+
+        def icon(f):
+            return self.style().standardIcon(
+                f(QtWidgets.QStyle.StandardPixmap),
+            )
+
+        open_button = QtWidgets.QPushButton()
+        layout.addWidget(open_button, row, 0)
+
+        path = QtWidgets.QLineEdit()
+        path.setEnabled(False)
+        path.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignRight |
+            QtCore.Qt.AlignmentFlag.AlignBaseline,
+        )
+        layout.addWidget(path, row, 1)
+
+        name = QtWidgets.QLineEdit()
+        layout.addWidget(name, row, 2)
+
+        left = QtWidgets.QPushButton(icon(lambda e: e.SP_ArrowLeft), '')
+        layout.addWidget(left, row, 3)
+
+        right = QtWidgets.QPushButton(icon(lambda e: e.SP_ArrowRight), '')
+        layout.addWidget(right, row, 4)
+
+        action = QtWidgets.QPushButton()
+        layout.addWidget(action, row, 5)
+
+        return Row(
+            open=open_button,
+            path=path,
+            name=name,
+            left=left,
+            right=right,
+            action=action,
+        )
+
+    def _set_enableds(self):
+        self._input.left.setEnabled(
+            bool(self._input_paths) and
+            self._input_i > 0)
+
+        self._input.right.setEnabled(
+            bool(self._input_paths) and
+            self._input_i < len(self._input_paths) - 1)
+
+        self._input.action.setEnabled(bool(self._input_paths))
+
+    def _open_input(self):
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self,
+            caption='Open Images',
+        )
+        self.set_input(paths)
+
+    def _open_output(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(
+            self,
+            caption='Select Output Directory',
+        )
+        self.set_output(path)
+
+    def set_input(self, paths):
+        self._input_paths = [pathlib.Path(p) for p in paths]
+        self._input_i = 0
+        self.step_input(0)
+
+    def step_input(self, step):
+        if self._input_paths:
+            self._input_i += step
+            self._input_i = min(
+                max(self._input_i, 0), len(self._input_paths) - 1)
+
+            path = self._input_paths[self._input_i]
+            self._input.path.setText(str(path.parent) + os.path.sep)
+            self._input.name.setText(path.name)
+            self._input_changed.emit(path)
+        else:
+            self._input.path.setText('')
+            self._input.name.setText('')
+            self._input_changed(None)
+
+        self._set_enableds()
+
+    def set_output(self, path):
+        path = pathlib.Path(path)
+        name = 'capture-00'
+        if path.is_file():
+            name = path.stem
+            path = path.parent
+
+        self._output.path.setText(str(path) + os.path.sep)
+        self._output.name.setText(name)
