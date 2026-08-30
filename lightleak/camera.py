@@ -102,9 +102,16 @@ class Camera:
         f = self._cam.file_get(path.folder, path.name,
                                gphoto2.GP_FILE_TYPE_NORMAL)
         data = f.get_data_and_size().tobytes()
+
+        try:
+            _, extension = path.name.rsplit('.', 1)
+            extension = '.' + extension.lower()
+        except ValueError:
+            extension = ''
+
         self._cam.file_delete(path.folder, path.name)
 
-        return data
+        return data, extension
 
 
 class Config:

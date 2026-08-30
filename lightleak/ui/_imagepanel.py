@@ -1,5 +1,6 @@
 import dataclasses
 import functools
+import pathlib
 import typing
 
 import PIL.Image
@@ -72,3 +73,8 @@ class ImagePanel(QtWidgets.QWidget):
     def set_image(self, image):
         self._image = image
         self._set_image_type(self._image_type, True)
+
+    @QtCore.Slot(pathlib.Path)
+    def save_image(self, path):
+        if self._image:
+            self._image.save(path)

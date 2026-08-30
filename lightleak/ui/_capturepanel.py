@@ -138,12 +138,12 @@ class CameraWorker(QtCore.QObject):
         if self._cam:
             self.state_changed.emit(self.State.BUSY)
             try:
-                cap = self._cam.capture()
+                cap, ext = self._cam.capture()
             except Exception as e:
                 self.error.emit(f'Failed to capture frame: {e}')
                 self.state_changed.emit(self.State.READY)
             else:
-                im = self._processor.load_bytes(cap)
+                im = self._processor.load_bytes(cap, extension=ext)
                 self.state_changed.emit(self.State.READY)
                 self.captured.emit(im)
 
