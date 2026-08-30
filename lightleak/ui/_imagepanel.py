@@ -63,9 +63,10 @@ class ImagePanel(QtWidgets.QWidget):
             return
         self._image_type = ty
 
-        if not self._image:
-            return
-        self.image_changed.emit(self._image_type.get(self._image))
+        if self._image:
+            self.image_changed.emit(self._image_type.get(self._image))
+        else:
+            self.image_changed.emit(None)
 
     @QtCore.Slot(lightleak.image.Image)
     def set_image(self, image):
