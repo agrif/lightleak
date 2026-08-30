@@ -2,6 +2,7 @@ import dataclasses
 import functools
 import os
 import pathlib
+import re
 
 from PySide6 import QtCore, QtWidgets
 
@@ -45,6 +46,7 @@ class ImageWorker(QtCore.QObject):
 
 class FileSelect(QtWidgets.QWidget):
     _input_changed = QtCore.Signal(pathlib.Path)
+    saved = QtCore.Signal(pathlib.Path)
 
     @property
     def loaded(self):
@@ -55,6 +57,11 @@ class FileSelect(QtWidgets.QWidget):
 
         self._input_paths = []
         self._input_i = 0
+
+        self._digit_re = re.compile(r'\d+')
+        self._output_path = None
+        self._output_template = None
+        self._output_i = None
 
         layout = QtWidgets.QGridLayout()
         layout.setColumnStretch(1, 1)
@@ -80,6 +87,12 @@ class FileSelect(QtWidgets.QWidget):
             functools.partial(self.step_input, 0))
 
         self._output.open.clicked.connect(self._open_output)
+        self._output.name.editingFinished.connect(self._set_output_name)
+        self._output.left.clicked.connect(
+            functools.partial(self.step_output, -1))
+        self._output.right.clicked.connect(
+            functools.partial(self.step_output, 1))
+        self._output.action.clicked.connect(self.save_output)
 
         self._input_changed.connect(self._worker.load_image)
 
@@ -130,14 +143,18 @@ class FileSelect(QtWidgets.QWidget):
 
     def _set_enableds(self):
         self._input.left.setEnabled(
-            bool(self._input_paths) and
-            self._input_i > 0)
-
+            bool(self._input_paths) and self._input_i > 0)
         self._input.right.setEnabled(
             bool(self._input_paths) and
             self._input_i < len(self._input_paths) - 1)
-
         self._input.action.setEnabled(bool(self._input_paths))
+
+        self._output.left.setEnabled(
+            bool(self._output_path) and
+            self._output_i is not None and self._output_i > 0)
+        self._output.right.setEnabled(
+            bool(self._output_path) and self._output_i is not None)
+        self._output.action.setEnabled(bool(self._output_path))
 
     def _open_input(self):
         paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -177,10 +194,57 @@ class FileSelect(QtWidgets.QWidget):
 
     def set_output(self, path):
         path = pathlib.Path(path)
-        name = 'capture-00'
+        name = self._output.name.text()
         if path.is_file():
             name = path.stem
             path = path.parent
 
-        self._output.path.setText(str(path) + os.path.sep)
-        self._output.name.setText(name)
+        self._output_path = path
+        self._set_output_name(name)
+        self.step_output(0)
+
+    def _set_output_name(self, name=None):
+        if name is None:
+            name = self._output.name.text()
+        if not name:
+            name = 'capture-00'
+
+        start = end = len(name)
+        digits = ''
+        for m in self._digit_re.finditer(name):
+            start = m.start()
+            end = m.end()
+            digits = m.group()
+
+        head = name[:start]
+        tail = name[end:]
+        num_digits = len(digits)
+
+        if num_digits:
+            self._output_template = lambda i: f'{head}{i:0{num_digits}d}{tail}'
+            self._output_i = int(digits)
+        else:
+            self._output_template = lambda _: name
+            self._output_i = None
+
+        self._output.name.setText(self._output_template(self._output_i))
+        self._output.name.clearFocus()
+        self._set_enableds()
+
+    def step_output(self, step):
+        if self._output_path:
+            if self._output_i is not None:
+                self._output_i = max(self._output_i + step, 0)
+            self._output.path.setText(str(self._output_path) + os.path.sep)
+            self._output.name.setText(self._output_template(self._output_i))
+        else:
+            self._output.path.setText('')
+            self._output.name.setText('')
+
+        self._set_enableds()
+
+    def save_output(self):
+        if not self._output_path:
+            return
+        path = self._output_path / self._output_template(self._output_i)
+        self.saved.emit(path)
