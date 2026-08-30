@@ -167,6 +167,8 @@ class CapturePanel(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
 
+        layout.addWidget(QtWidgets.QLabel('Camera Capture'))
+
         self._connect_button = QtWidgets.QPushButton('Connect')
         layout.addWidget(self._connect_button)
         layout.addSpacing(20)
