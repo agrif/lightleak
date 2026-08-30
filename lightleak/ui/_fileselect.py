@@ -13,7 +13,7 @@ import lightleak.image
 class Row:
     open: QtWidgets.QPushButton
     path: QtWidgets.QLineEdit
-    name: QtWidgets.QLineEdit
+    name: QtWidgets.QLineEdit | QtWidgets.QComboBox
     left: QtWidgets.QPushButton
     right: QtWidgets.QPushButton
     action: QtWidgets.QPushButton
@@ -67,18 +67,18 @@ class FileSelect(QtWidgets.QWidget):
         layout.setColumnStretch(1, 1)
         self.setLayout(layout)
 
-        self._input = self._add_row(layout, 0)
+        self._input = self._add_row(layout, 0, combo=True)
         self._output = self._add_row(layout, 1)
         self._worker = ImageWorker(processor)
 
         self._input.open.setText('Open Input')
         self._input.action.setText('Load')
-        self._input.name.setDisabled(True)
 
         self._output.open.setText('Open Output')
         self._output.action.setText('Save')
 
         self._input.open.clicked.connect(self._open_input)
+        self._input.name.currentIndexChanged.connect(self._set_input_index)
         self._input.left.clicked.connect(
             functools.partial(self.step_input, -1))
         self._input.right.clicked.connect(
@@ -102,7 +102,7 @@ class FileSelect(QtWidgets.QWidget):
     def stop(self):
         self._worker.stop()
 
-    def _add_row(self, layout, row):
+    def _add_row(self, layout, row, combo=False):
 
         def icon(f):
             return self.style().standardIcon(
@@ -120,7 +120,10 @@ class FileSelect(QtWidgets.QWidget):
         )
         layout.addWidget(path, row, 1)
 
-        name = QtWidgets.QLineEdit()
+        if combo:
+            name = QtWidgets.QComboBox()
+        else:
+            name = QtWidgets.QLineEdit()
         layout.addWidget(name, row, 2)
 
         left = QtWidgets.QPushButton(icon(lambda e: e.SP_ArrowLeft), '')
@@ -147,6 +150,7 @@ class FileSelect(QtWidgets.QWidget):
         self._input.right.setEnabled(
             bool(self._input_paths) and
             self._input_i < len(self._input_paths) - 1)
+        self._input.name.setEnabled(bool(self._input_paths))
         self._input.action.setEnabled(bool(self._input_paths))
 
         self._output.left.setEnabled(
@@ -172,9 +176,21 @@ class FileSelect(QtWidgets.QWidget):
         self.set_output(path)
 
     def set_input(self, paths):
-        self._input_paths = [pathlib.Path(p) for p in paths]
+        self._input_paths = [pathlib.Path(p).absolute() for p in paths]
         self._input_i = 0
+        self._input.name.clear()
+        self._input.name.addItems([p.name for p in self._input_paths])
         self.step_input(0)
+
+    def _set_input_index(self, index):
+        if index < 0:
+            self._input_i = 0
+            self._input_changed.emit(None)
+        else:
+            self._input_i = index
+            self._input_changed.emit(self._input_paths[self._input_i])
+
+        self._set_enableds()
 
     def step_input(self, step):
         if self._input_paths:
@@ -184,12 +200,10 @@ class FileSelect(QtWidgets.QWidget):
 
             path = self._input_paths[self._input_i]
             self._input.path.setText(str(path.parent) + os.path.sep)
-            self._input.name.setText(path.name)
-            self._input_changed.emit(path)
+            self._input.name.setCurrentText(path.name)
         else:
             self._input.path.setText('')
-            self._input.name.setText('')
-            self._input_changed(None)
+            self._input.name.setCurrentText('')
 
         self._set_enableds()
 
