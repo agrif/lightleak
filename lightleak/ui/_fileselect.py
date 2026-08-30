@@ -181,14 +181,16 @@ class FileSelect(QtWidgets.QWidget):
             self,
             caption='Open Images',
         )
-        self.set_input(paths)
+        if paths:
+            self.set_input(paths)
 
     def _open_output(self):
         path = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             caption='Select Output Directory',
         )
-        self.set_output(path)
+        if path:
+            self.set_output(path)
 
     def set_input(self, paths):
         self._input_paths = [pathlib.Path(p).absolute() for p in paths]
