@@ -17,7 +17,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._capture_panel = lightleak.ui.CapturePanel(status_bar, processor)
         self._file_select = lightleak.ui.FileSelect(processor)
-        self._image_panel = lightleak.ui.ImagePanel()
+        self._image_panel = lightleak.ui.ImagePanel(processor)
         self._image_view = lightleak.ui.ImageView()
 
         self._capture_panel.captured.connect(self._image_panel.set_image)
@@ -56,3 +56,4 @@ class MainWindow(QtWidgets.QMainWindow):
     def _input_busy(self, busy):
         self._capture_panel.set_input_busy(busy)
         self._file_select.set_input_busy(busy)
+        self._image_panel.set_input_busy(busy)

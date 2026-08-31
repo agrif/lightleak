@@ -26,7 +26,7 @@ def _lin_to_srgb(lin):
 
 class Processor:
     def __init__(self):
-        pass
+        self._flat_field = None
 
     def open(self, path):
         path = pathlib.Path(path)
@@ -80,6 +80,9 @@ class Processor:
         linear = _srgb_to_lin(srgbi / pixelmax)
 
         return (linear, satpixels, numpy.array([1.0, 1.0, 1.0]))
+
+    def set_flat_field(self, im):
+        self._flat_field = im
 
 
 class Image:
