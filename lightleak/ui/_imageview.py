@@ -8,6 +8,8 @@ class ImageView(QtWidgets.QGraphicsView):
     # per mouse wheel degree, wheels usually have detents at 15 deg
     scale_factor = 1.25 ** (1 / 15)
 
+    image_picked = QtCore.Signal(int, int, int, int)
+
     def __init__(self):
         super().__init__()
 
@@ -37,6 +39,9 @@ class ImageView(QtWidgets.QGraphicsView):
 
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(20, 20, 20)))
         self.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+
+        self._rubber_band = None
+        self.rubberBandChanged.connect(self._rubber_band_changed)
 
     def set_scale(self, scale):
         rect = QtCore.QRectF(self._image.pixmap().rect())
@@ -98,3 +103,28 @@ class ImageView(QtWidgets.QGraphicsView):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.set_scale(self.scale_factor ** self._zoom)
+
+    @QtCore.Slot()
+    def start_image_pick(self, start):
+        self.setDragMode(QtWidgets.QGraphicsView.DragMode.RubberBandDrag)
+
+    def _rubber_band_changed(self, rect, a, b):
+        if rect.isNull():
+            if self._has_image:
+                self.setDragMode(
+                    QtWidgets.QGraphicsView.DragMode.ScrollHandDrag)
+            else:
+                self.setDragMode(QtWidgets.QGraphicsView.DragMode.NoDrag)
+
+            a, b = self._rubber_band
+            x0, y0 = a.toTuple()
+            x1, y1 = b.toTuple()
+
+            xs = [int(round(x)) for x in [x0, x1]]
+            xs.sort()
+            ys = [int(round(y)) for y in [y0, y1]]
+            ys.sort()
+
+            self.image_picked.emit(xs[0], ys[0], xs[1], ys[1])
+        else:
+            self._rubber_band = (a, b)
