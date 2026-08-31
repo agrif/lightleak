@@ -36,14 +36,14 @@ class Processor:
     def load_bytes(self, data, extension=''):
         for loader in [self._load_raw, self._load_pillow]:
             try:
-                linear, satpixels, whitebalance = loader(data)
+                linear, satpixels = loader(data)
                 break
             except Exception:
                 continue
         else:
             raise RuntimeError('no loader for image')
 
-        return Image(data, extension, linear, satpixels, whitebalance)
+        return Image(self, data, extension, linear, satpixels)
 
     def load(self, f, extension=''):
         data = f.read()
@@ -52,14 +52,25 @@ class Processor:
     def _load_raw(self, data):
         with io.BytesIO(data) as f:
             raw = rawpy.imread(f)
+
         linear = raw.postprocess(
-            output_color=rawpy.ColorSpace.sRGB,
+            output_color=rawpy.ColorSpace.raw,
             output_bps=16,
             user_flip=0,
             no_auto_scale=True,
             no_auto_bright=True,
             gamma=(1, 1),
         )
+
+        xyz_to_srgb = numpy.array([
+            [3.2404542, -1.5371385, -0.4985314],
+            [-0.9692660, 1.8760108, 0.0415560],
+            [0.0556434, -0.2040259, 1.0572252],
+        ])
+
+        xyz_to_cam = raw.rgb_xyz_matrix[0:3, 0:3]
+        convert = xyz_to_srgb @ numpy.linalg.inv(xyz_to_cam)
+        linear = linear @ convert.T
 
         satpixels = raw.raw_image_visible
         white_level = raw.white_level
@@ -68,7 +79,7 @@ class Processor:
             satpixels = numpy.max(satpixels, axis=-1)
         satpixels = satpixels >= white_level
 
-        return (linear / white_level, satpixels, raw.camera_whitebalance[:3])
+        return (linear / white_level, satpixels)
 
     def _load_pillow(self, data):
         with io.BytesIO(data) as f:
@@ -79,24 +90,25 @@ class Processor:
         satpixels = satpixels >= pixelmax
         linear = _srgb_to_lin(srgbi / pixelmax)
 
-        return (linear, satpixels, numpy.array([1.0, 1.0, 1.0]))
+        return (linear, satpixels)
 
     def set_flat_field(self, im):
         self._flat_field = im
 
 
 class Image:
-    def __init__(self, data, extension, linear, satpixels, whitebalance):
+    def __init__(self, processor, data, extension, linear, satpixels):
+        self._processor = processor
         self._data = data
         self._extension = extension
         self._linear = linear
         self._satpixels = satpixels
-        self._whitebalance = whitebalance / numpy.max(whitebalance)
 
         # preload some properties
         self.preview
         self.clipped
         self.focus
+        self.flat_preview
 
     def save(self, path):
         ext = self._extension
@@ -106,14 +118,18 @@ class Image:
         with open(str(path) + ext, 'wb') as f:
             f.write(self._data)
 
-    @functools.cached_property
-    def preview(self):
-        lin = self._linear * self._whitebalance
-        lin /= numpy.percentile(lin, 99)
-        srgb = _lin_to_srgb(lin)
-        clipped = numpy.clip(srgb, 0.0, 1.0)
+    def _preview_linear(self, lin):
+        lin /= numpy.percentile(lin[numpy.isfinite(lin)], 99)
+        lin[~numpy.isfinite(lin)] = 1.0
+        srgb = _lin_to_srgb(numpy.maximum(lin, 0.0))
+        clipped = numpy.minimum(srgb, 1.0)
         preview = numpy.round(255 * clipped).astype(numpy.uint8)
         return PIL.Image.fromarray(preview)
+
+
+    @functools.cached_property
+    def preview(self):
+        return self._preview_linear(self._linear)
 
     @functools.cached_property
     def clipped(self):
@@ -124,3 +140,23 @@ class Image:
     @functools.cached_property
     def focus(self):
         return self.preview.convert('L').filter(PIL.ImageFilter.FIND_EDGES)
+
+    @functools.cached_property
+    def _flat_corrected(self):
+        flat = self._processor._flat_field
+        if not flat:
+            return self._linear
+        if flat._linear.shape != self._linear.shape:
+            return self._linear
+
+        corrected = numpy.divide(
+            self._linear, flat._linear,
+            out=numpy.zeros_like(self._linear),
+            where=flat._linear != 0,
+        )
+        corrected[flat._linear == 0] = numpy.inf
+        return corrected
+
+    @functools.cached_property
+    def flat_preview(self):
+        return self._preview_linear(self._flat_corrected)
