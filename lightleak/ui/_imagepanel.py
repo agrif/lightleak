@@ -7,7 +7,7 @@ import typing
 
 import PIL.Image
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 import lightleak.image
 
@@ -102,16 +102,19 @@ class ChecklistButton(QtWidgets.QWidget):
 
         self.setChecked(self._label.checked())
 
+    def _update_button(self):
+        if self._label.checked():
+            self._button.setText('Unset')
+        else:
+            self._button.setText(self._set_text)
+        self.setEnabled(self._enabled)
+
     def checked(self):
         return self._label.checked()
 
     def setChecked(self, checked):
-        self.setEnabled(self._enabled)
         self._label.setChecked(checked)
-        if checked:
-            self._button.setText('Unset')
-        else:
-            self._button.setText(self._set_text)
+        self._update_button()
 
     def setEnabled(self, enabled):
         self._enabled = enabled
@@ -128,6 +131,59 @@ class ChecklistButton(QtWidgets.QWidget):
                 self.clicked.emit(True)
         else:
             self.clicked.emit(False)
+
+
+class ChecklistButtonModal(ChecklistButton):
+    canceled = QtCore.Signal()
+
+    def __init__(self, label_text, set_text):
+        super().__init__(label_text, set_text)
+
+        app = QtWidgets.QApplication.instance()
+        app.installEventFilter(self)
+
+    def _update_button(self):
+        if self._button.isChecked():
+            self._button.setText('Cancel')
+        elif self._label.checked():
+            self._button.setText('Unset')
+            self._button.setCheckable(False)
+        else:
+            self._button.setText(self._set_text)
+            self._button.setCheckable(True)
+
+        self.setEnabled(self._enabled)
+
+    def setEnabled(self, enabled):
+        if not enabled and self._button.isChecked():
+            self._button.setChecked(False)
+            self._update_button()
+            self.canceled.emit()
+        else:
+            super().setEnabled(enabled)
+
+    def eventFilter(self, obj, event):
+        cancel = False
+
+        if isinstance(event, QtGui.QKeyEvent):
+            cancel = (event.key() == QtCore.Qt.Key_Escape)
+        elif event.type() == QtCore.QEvent.Type.MouseButtonPress:
+            cancel = True
+
+        if cancel and self._button.isChecked():
+            self._button.setChecked(False)
+            self._update_button()
+            self.canceled.emit()
+
+        return False
+
+    def _on_click(self, toggled):
+        checkable = self._button.isCheckable()
+        self._update_button()
+        if checkable and not toggled:
+            self.canceled.emit()
+        else:
+            super()._on_click()
 
 
 class ImagePanel(QtWidgets.QWidget):
