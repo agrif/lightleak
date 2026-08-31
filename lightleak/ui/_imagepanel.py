@@ -53,18 +53,24 @@ class ChecklistLabel(QtWidgets.QWidget):
         self._checked = False
 
         layout = QtWidgets.QHBoxLayout()
-        layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
         self._icon = QtWidgets.QLabel()
-        layout.addWidget(QtWidgets.QLabel(text))
+        if isinstance(text, QtWidgets.QWidget):
+            layout.addWidget(text)
+        else:
+            layout.addWidget(QtWidgets.QLabel(text))
         layout.addWidget(self._icon)
 
         self._icon.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignRight |
-            QtCore.Qt.AlignmentFlag.AlignBaseline,
+            QtCore.Qt.AlignmentFlag.AlignCenter,
         )
+        self._icon.setSizePolicy(QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        ))
 
         self.setChecked(self._checked)
 
@@ -88,31 +94,25 @@ class ChecklistLabel(QtWidgets.QWidget):
 class ChecklistButton(QtWidgets.QWidget):
     clicked = QtCore.Signal(bool)
 
-    def __init__(self, label_text, set_text):
+    def __init__(self, label_text):
         super().__init__()
 
         self._label_text = label_text
-        self._set_text = set_text
         self._enabled = True
 
         layout = QtWidgets.QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-        self._label = ChecklistLabel(label_text)
-        self._button = QtWidgets.QPushButton(self._set_text)
+        self._button = QtWidgets.QPushButton(self._label_text)
+        self._label = ChecklistLabel(self._button)
         layout.addWidget(self._label)
-        layout.addWidget(self._button)
 
         self._button.clicked.connect(self._on_click)
 
         self.setChecked(self._label.checked())
 
     def _update_button(self):
-        if self._label.checked():
-            self._button.setText('Unset')
-        else:
-            self._button.setText(self._set_text)
         self.setEnabled(self._enabled)
 
     def checked(self):
@@ -142,20 +142,19 @@ class ChecklistButton(QtWidgets.QWidget):
 class ChecklistButtonModal(ChecklistButton):
     canceled = QtCore.Signal()
 
-    def __init__(self, label_text, set_text):
-        super().__init__(label_text, set_text)
+    def __init__(self, label_text):
+        super().__init__(label_text)
 
         app = QtWidgets.QApplication.instance()
         app.installEventFilter(self)
 
     def _update_button(self):
+        self._button.setText(self._label_text)
         if self._button.isChecked():
             self._button.setText('Cancel')
         elif self._label.checked():
-            self._button.setText('Unset')
             self._button.setCheckable(False)
         else:
-            self._button.setText(self._set_text)
             self._button.setCheckable(True)
 
         self.setEnabled(self._enabled)
@@ -224,12 +223,15 @@ class ImagePanel(QtWidgets.QWidget):
             self._image_type_buttons.append(radio)
 
         layout.addSpacing(20)
-        self._flat_field = ChecklistButton('Flat Field', 'Use Current')
-        self._flat_field.clicked.connect(self._set_flat_field)
-        layout.addWidget(self._flat_field)
+
+        neg_box = QtWidgets.QGroupBox('Negatives')
+        layout.addWidget(neg_box)
+
+        neg_layout = QtWidgets.QVBoxLayout()
+        neg_box.setLayout(neg_layout)
 
         gamma_layout = QtWidgets.QHBoxLayout()
-        layout.addLayout(gamma_layout)
+        neg_layout.addLayout(gamma_layout)
         gamma_layout.addWidget(QtWidgets.QLabel('Gamma'))
         gamma = QtWidgets.QDoubleSpinBox()
         gamma_layout.addWidget(gamma)
@@ -240,21 +242,25 @@ class ImagePanel(QtWidgets.QWidget):
         gamma.valueChanged.connect(self._processor.set_gamma)
         gamma.setValue(1.0)
 
-        self._unexposed = ChecklistButtonModal('Unexposed', 'Select')
-        self._unexposed.clicked.connect(
-            functools.partial(
-                self._set_exposure, self._unexposed,
-                self._processor.set_unexposed))
-        self._unexposed.canceled.connect(self._cancel_image_pick)
-        layout.addWidget(self._unexposed)
+        self._flat_field = ChecklistButton('Flat Field')
+        self._flat_field.clicked.connect(self._set_flat_field)
+        neg_layout.addWidget(self._flat_field)
 
-        self._exposed = ChecklistButtonModal('Exposed', 'Select')
+        self._exposed = ChecklistButtonModal('Exposed')
         self._exposed.clicked.connect(
             functools.partial(
                 self._set_exposure, self._exposed,
                 self._processor.set_exposed))
         self._exposed.canceled.connect(self._cancel_image_pick)
-        layout.addWidget(self._exposed)
+        neg_layout.addWidget(self._exposed)
+
+        self._unexposed = ChecklistButtonModal('Unexposed')
+        self._unexposed.clicked.connect(
+            functools.partial(
+                self._set_exposure, self._unexposed,
+                self._processor.set_unexposed))
+        self._unexposed.canceled.connect(self._cancel_image_pick)
+        neg_layout.addWidget(self._unexposed)
 
         layout.addStretch()
 
