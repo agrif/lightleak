@@ -16,7 +16,8 @@ import lightleak.image
 class ImageType:
     label: str
     get: typing.Callable[[lightleak.image.Image], PIL.Image.Image]
-    enabled: typing.Callable[[ImagePanel], bool] = lambda _: True
+    enabled: typing.Callable[[lightleak.image.Image | None], bool] = \
+        lambda _: True
 
 
 IMAGE_TYPES = [
@@ -35,13 +36,12 @@ IMAGE_TYPES = [
     ImageType(
         label='Flat Corrected',
         get=lambda im: im.flat_preview,
-        enabled=lambda panel: panel._flat_field.checked(),
+        enabled=lambda im: im is not None and im.flat_preview is not None,
     ),
     ImageType(
         label='Inverted',
         get=lambda im: im.inverted_preview,
-        enabled=(lambda panel:
-                 panel._unexposed.checked() and panel._exposed.checked()),
+        enabled=lambda im: im is not None and im.inverted_preview is not None,
     ),
 ]
 
@@ -268,7 +268,7 @@ class ImagePanel(QtWidgets.QWidget):
             w.setEnabled(bool(self._image) and not self._input_busy)
 
         for ty, radio in zip(IMAGE_TYPES, self._image_type_buttons):
-            en = ty.enabled(self)
+            en = ty.enabled(self._image)
             radio.setEnabled(en)
             if not en and radio.isChecked():
                 self._image_type_buttons[0].setChecked(True)

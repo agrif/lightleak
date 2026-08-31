@@ -178,6 +178,9 @@ class Image:
         return self._linear[ys[0]:ys[1],xs[0]:xs[1]]
 
     def _preview_linear(self, lin, autoscale=False):
+        if lin is None:
+            return None
+
         lin = lin.copy()
         if autoscale:
             lin /= numpy.percentile(lin[numpy.isfinite(lin)], 99)
@@ -218,7 +221,7 @@ class Image:
     def _flat_corrected(self):
         flat = self._processor._flat_field
         if not flat:
-            return self._linear
+            return None
 
         return self._flat_correct(self._linear, flat._linear)
 
@@ -232,12 +235,16 @@ class Image:
         exposed = self._processor._exposed
 
         if unexposed is None or exposed is None:
-            return self._linear
+            return None
+
+        source = self._flat_corrected
+        if source is None:
+            source = self._linear
 
         # convert to densities
         unexposed = -numpy.log10(unexposed)
         exposed = -numpy.log10(exposed)
-        density = -numpy.log10(self._flat_corrected)
+        density = -numpy.log10(source)
 
         # scale density to [0, 1]
         density = (density - unexposed) / (exposed - unexposed)
