@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import functools
 import pathlib
@@ -14,6 +16,7 @@ import lightleak.image
 class ImageType:
     label: str
     get: typing.Callable[[lightleak.image.Image], PIL.Image.Image]
+    enabled: typing.Callable[[ImagePanel], bool] = lambda _: True
 
 
 IMAGE_TYPES = [
@@ -29,12 +32,19 @@ IMAGE_TYPES = [
         label='Focus',
         get=lambda im: im.focus,
     ),
+    ImageType(
+        label='Flat Corrected',
+        get=lambda im: im.flat_preview,
+        enabled=lambda panel: panel._flat_field.checked(),
+    ),
 ]
 
 
 class ChecklistLabel(QtWidgets.QWidget):
     def __init__(self, text):
         super().__init__()
+
+        self._checked = False
 
         layout = QtWidgets.QHBoxLayout()
         layout.setSpacing(0)
@@ -50,7 +60,7 @@ class ChecklistLabel(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignBaseline,
         )
 
-        self.setChecked(False)
+        self.setChecked(self._checked)
 
     def _set_standard(self, f):
         pixmap = self.style().standardPixmap(
@@ -58,7 +68,11 @@ class ChecklistLabel(QtWidgets.QWidget):
         )
         self._icon.setPixmap(pixmap)
 
+    def checked(self):
+        return self._checked
+
     def setChecked(self, checked):
+        self._checked = checked
         if checked:
             self._set_standard(lambda e: e.SP_DialogApplyButton)
         else:
@@ -73,7 +87,6 @@ class ChecklistButton(QtWidgets.QWidget):
 
         self._label_text = label_text
         self._set_text = set_text
-        self._checked = False
         self._enabled = True
 
         layout = QtWidgets.QVBoxLayout()
@@ -87,10 +100,12 @@ class ChecklistButton(QtWidgets.QWidget):
 
         self._button.clicked.connect(self._on_click)
 
-        self.setChecked(self._checked)
+        self.setChecked(self._label.checked())
+
+    def checked(self):
+        return self._label.checked()
 
     def setChecked(self, checked):
-        self._checked = checked
         self.setEnabled(self._enabled)
         self._label.setChecked(checked)
         if checked:
@@ -100,19 +115,19 @@ class ChecklistButton(QtWidgets.QWidget):
 
     def setEnabled(self, enabled):
         self._enabled = enabled
-        self._button.setEnabled(enabled or self._checked)
+        self._button.setEnabled(enabled or self._label.checked())
 
     def _on_click(self):
-        if self._checked:
+        if self._label.checked():
             answer = QtWidgets.QMessageBox.question(
                 self,
                 f'Unset {self._label_text}?',
                 f'Are you sure you want to unset {self._label_text}?',
             )
             if answer & QtWidgets.QMessageBox.StandardButtons.Yes:
-                self.clicked.emit(self._checked)
+                self.clicked.emit(True)
         else:
-            self.clicked.emit(self._checked)
+            self.clicked.emit(False)
 
 
 class ImagePanel(QtWidgets.QWidget):
@@ -134,6 +149,7 @@ class ImagePanel(QtWidgets.QWidget):
 
         display_layout = QtWidgets.QVBoxLayout()
         display_box.setLayout(display_layout)
+        self._image_type_buttons = []
         for ty in IMAGE_TYPES:
             radio = QtWidgets.QRadioButton(ty.label)
             if ty == self._image_type:
@@ -141,6 +157,7 @@ class ImagePanel(QtWidgets.QWidget):
             radio.toggled.connect(
                 functools.partial(self._set_image_type, ty))
             display_layout.addWidget(radio)
+            self._image_type_buttons.append(radio)
 
         layout.addSpacing(20)
         self._flat_field = ChecklistButton('Flat Field', 'Use Current')
@@ -169,6 +186,12 @@ class ImagePanel(QtWidgets.QWidget):
         for w in [self._flat_field]:
             w.setEnabled(bool(self._image) and not self._input_busy)
 
+        for ty, radio in zip(IMAGE_TYPES, self._image_type_buttons):
+            en = ty.enabled(self)
+            radio.setEnabled(en)
+            if not en and radio.isChecked():
+                self._image_type_buttons[0].setChecked(True)
+
     @QtCore.Slot(lightleak.image.Image)
     def set_image(self, image):
         self._image = image
@@ -187,3 +210,4 @@ class ImagePanel(QtWidgets.QWidget):
         elif self._image:
             self._processor.set_flat_field(self._image)
             self._flat_field.setChecked(True)
+        self._set_enableds()
