@@ -27,8 +27,10 @@ def _lin_to_srgb(lin):
 class Processor:
     def __init__(self):
         self._flat_field = None
+        self._unexposed = None
         self._unexposed_patch = None
         self._unexposed_rect = None
+        self._exposed = None
         self._exposed_patch = None
         self._exposed_rect = None
 
@@ -98,14 +100,33 @@ class Processor:
 
     def set_flat_field(self, im):
         self._flat_field = im
+        self._update_exposures()
 
     def set_unexposed(self, rect, patch):
         self._unexposed_rect = rect
         self._unexposed_patch = patch
+        self._update_exposures()
 
     def set_exposed(self, rect, patch):
         self._exposed_rect = rect
         self._exposed_patch = patch
+        self._update_exposures()
+
+    def _update_exposures(self):
+        def calc(rect, patch):
+            if rect is None or patch is None:
+                return None
+
+            if self._flat_field:
+                flat = self._flat_field.linear_patch(*rect)
+                corrected = Image._flat_correct(patch, flat)
+            else:
+                corrected = patch
+
+            return numpy.mean(corrected, axis=(0, 1))
+
+        self._unexposed = calc(self._unexposed_rect, self._unexposed_patch)
+        self._exposed = calc(self._exposed_rect, self._exposed_patch)
 
 
 class Image:
@@ -177,21 +198,26 @@ class Image:
     def focus(self):
         return self.preview.convert('L').filter(PIL.ImageFilter.FIND_EDGES)
 
+    @classmethod
+    def _flat_correct(cls, lin, flat):
+        if lin.shape != flat.shape:
+            return lin
+
+        corrected = numpy.divide(
+            lin, flat,
+            out=numpy.zeros_like(lin),
+            where=flat != 0,
+        )
+        corrected[flat == 0] = numpy.inf
+        return corrected
+
     @functools.cached_property
     def _flat_corrected(self):
         flat = self._processor._flat_field
         if not flat:
             return self._linear
-        if flat._linear.shape != self._linear.shape:
-            return self._linear
 
-        corrected = numpy.divide(
-            self._linear, flat._linear,
-            out=numpy.zeros_like(self._linear),
-            where=flat._linear != 0,
-        )
-        corrected[flat._linear == 0] = numpy.inf
-        return corrected
+        return self._flat_correct(self._linear, flat._linear)
 
     @functools.cached_property
     def flat_preview(self):
