@@ -33,6 +33,7 @@ class Processor:
         self._exposed = None
         self._exposed_patch = None
         self._exposed_rect = None
+        self._gamma = 1.0
 
     def open(self, path):
         path = pathlib.Path(path)
@@ -111,6 +112,9 @@ class Processor:
         self._exposed_rect = rect
         self._exposed_patch = patch
         self._update_exposures()
+
+    def set_gamma(self, gamma):
+        self._gamma = gamma
 
     def _update_exposures(self):
         def calc(rect, patch):
@@ -233,6 +237,7 @@ class Image:
     def _inverted(self):
         unexposed = self._processor._unexposed
         exposed = self._processor._exposed
+        gamma = self._processor._gamma
 
         if unexposed is None or exposed is None:
             return None
@@ -251,7 +256,6 @@ class Image:
         density = numpy.clip(density, 0, 1)
 
         # film curve, scaled to [0, 1]
-        gamma = 1.0
         linear = numpy.power(10, density * gamma) - 1
         linear /= numpy.power(10, gamma) - 1
 
