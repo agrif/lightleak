@@ -37,6 +37,12 @@ IMAGE_TYPES = [
         get=lambda im: im.flat_preview,
         enabled=lambda panel: panel._flat_field.checked(),
     ),
+    ImageType(
+        label='Inverted',
+        get=lambda im: im.inverted_preview,
+        enabled=(lambda panel:
+                 panel._unexposed.checked() and panel._exposed.checked()),
+    ),
 ]
 
 
@@ -294,11 +300,11 @@ class ImagePanel(QtWidgets.QWidget):
         if checked:
             setter(None, None)
             button.setChecked(False)
+            self._set_enableds()
         elif self._image:
             self._image_picked_final = functools.partial(
                 self._image_picked_final_for, button, setter)
             self.start_image_pick.emit(True)
-        self._set_enableds()
 
     @QtCore.Slot(int, int, int, int)
     def image_picked(self, x0, y0, x1, y1):
@@ -314,3 +320,4 @@ class ImagePanel(QtWidgets.QWidget):
 
         setter((x0, y0, x1, y1), patch)
         button.setChecked(True)
+        self._set_enableds()

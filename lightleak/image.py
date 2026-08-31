@@ -142,6 +142,7 @@ class Image:
         self.clipped
         self.focus
         self.flat_preview
+        self.inverted_preview
 
     def save(self, path):
         ext = self._extension
@@ -176,8 +177,10 @@ class Image:
 
         return self._linear[ys[0]:ys[1],xs[0]:xs[1]]
 
-    def _preview_linear(self, lin):
-        lin /= numpy.percentile(lin[numpy.isfinite(lin)], 99)
+    def _preview_linear(self, lin, autoscale=False):
+        lin = lin.copy()
+        if autoscale:
+            lin /= numpy.percentile(lin[numpy.isfinite(lin)], 99)
         lin[~numpy.isfinite(lin)] = 1.0
         srgb = _lin_to_srgb(numpy.maximum(lin, 0.0))
         clipped = numpy.minimum(srgb, 1.0)
@@ -186,7 +189,7 @@ class Image:
 
     @functools.cached_property
     def preview(self):
-        return self._preview_linear(self._linear)
+        return self._preview_linear(self._linear, autoscale=True)
 
     @functools.cached_property
     def clipped(self):
@@ -221,4 +224,32 @@ class Image:
 
     @functools.cached_property
     def flat_preview(self):
-        return self._preview_linear(self._flat_corrected)
+        return self._preview_linear(self._flat_corrected, autoscale=True)
+
+    @functools.cached_property
+    def _inverted(self):
+        unexposed = self._processor._unexposed
+        exposed = self._processor._exposed
+
+        if unexposed is None or exposed is None:
+            return self._linear
+
+        # convert to densities
+        unexposed = -numpy.log10(unexposed)
+        exposed = -numpy.log10(exposed)
+        density = -numpy.log10(self._flat_corrected)
+
+        # scale density to [0, 1]
+        density = (density - unexposed) / (exposed - unexposed)
+        density = numpy.clip(density, 0, 1)
+
+        # film curve, scaled to [0, 1]
+        gamma = 1.0
+        linear = numpy.power(10, density * gamma) - 1
+        linear /= numpy.power(10, gamma) - 1
+
+        return linear
+
+    @functools.cached_property
+    def inverted_preview(self):
+        return self._preview_linear(self._inverted)
