@@ -118,6 +118,18 @@ class Image:
         with open(str(path) + ext, 'wb') as f:
             f.write(self._data)
 
+    @property
+    def width(self):
+        return self._linear.shape[1]
+
+    @property
+    def height(self):
+        return self._linear.shape[0]
+
+    @property
+    def linear(self):
+        return self._linear
+
     def _preview_linear(self, lin):
         lin /= numpy.percentile(lin[numpy.isfinite(lin)], 99)
         lin[~numpy.isfinite(lin)] = 1.0
@@ -125,7 +137,6 @@ class Image:
         clipped = numpy.minimum(srgb, 1.0)
         preview = numpy.round(255 * clipped).astype(numpy.uint8)
         return PIL.Image.fromarray(preview)
-
 
     @functools.cached_property
     def preview(self):
