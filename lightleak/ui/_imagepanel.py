@@ -308,18 +308,9 @@ class ImagePanel(QtWidgets.QWidget):
         if not self._image:
             return
 
-        def clamp(a, m, n):
-            return min(max(a, m), n)
-
-        width, height = (self._image.width, self._image.height)
-        x0 = clamp(x0, 0, width)
-        x1 = clamp(x1, 0, width)
-        y0 = clamp(y0, 0, height)
-        y1 = clamp(y1, 0, height)
-
-        if x1 - x0 <= 0 or y1 - y0 <= 0:
+        patch = self._image.linear_patch(x0, y0, x1, y1)
+        if patch.shape[0] == 0 or patch.shape[1] == 0:
             return
 
-        patch = self._image.linear[y0:y1,x0:x1]
         setter((x0, y0, x1, y1), patch)
         button.setChecked(True)

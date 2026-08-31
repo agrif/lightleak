@@ -142,6 +142,19 @@ class Image:
     def linear(self):
         return self._linear
 
+    def linear_patch(self, x0, y0, x1, y1):
+        def clamp(a, m, n):
+            return min(max(a, m), n)
+
+        height, width, _ = self._linear.shape
+
+        xs = [clamp(x, 0, width) for x in [x0, x1]]
+        xs.sort()
+        ys = [clamp(y, 0, height) for y in [y0, y1]]
+        ys.sort()
+
+        return self._linear[ys[0]:ys[1],xs[0]:xs[1]]
+
     def _preview_linear(self, lin):
         lin /= numpy.percentile(lin[numpy.isfinite(lin)], 99)
         lin[~numpy.isfinite(lin)] = 1.0

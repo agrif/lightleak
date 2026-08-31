@@ -117,14 +117,7 @@ class ImageView(QtWidgets.QGraphicsView):
                 self.setDragMode(QtWidgets.QGraphicsView.DragMode.NoDrag)
 
             a, b = self._rubber_band
-            x0, y0 = a.toTuple()
-            x1, y1 = b.toTuple()
-
-            xs = [int(round(x)) for x in [x0, x1]]
-            xs.sort()
-            ys = [int(round(y)) for y in [y0, y1]]
-            ys.sort()
-
-            self.image_picked.emit(xs[0], ys[0], xs[1], ys[1])
+            rect = [int(round(x)) for x in [*a.toTuple(), *b.toTuple()]]
+            self.image_picked.emit(*rect)
         else:
             self._rubber_band = (a, b)
