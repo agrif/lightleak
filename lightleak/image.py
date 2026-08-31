@@ -27,6 +27,10 @@ def _lin_to_srgb(lin):
 class Processor:
     def __init__(self):
         self._flat_field = None
+        self._unexposed_patch = None
+        self._unexposed_rect = None
+        self._exposed_patch = None
+        self._exposed_rect = None
 
     def open(self, path):
         path = pathlib.Path(path)
@@ -94,6 +98,14 @@ class Processor:
 
     def set_flat_field(self, im):
         self._flat_field = im
+
+    def set_unexposed(self, rect, patch):
+        self._unexposed_rect = rect
+        self._unexposed_patch = patch
+
+    def set_exposed(self, rect, patch):
+        self._exposed_rect = rect
+        self._exposed_patch = patch
 
 
 class Image:
