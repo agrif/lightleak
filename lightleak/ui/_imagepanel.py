@@ -188,6 +188,7 @@ class ChecklistButtonModal(ChecklistButton):
 
 class ImagePanel(QtWidgets.QWidget):
     image_changed = QtCore.Signal(PIL.Image.Image)
+    start_image_pick = QtCore.Signal(bool)
 
     def __init__(self, processor):
         super().__init__()
@@ -196,6 +197,7 @@ class ImagePanel(QtWidgets.QWidget):
         self._input_busy = False
         self._image = None
         self._image_type = IMAGE_TYPES[0]
+        self._image_picked_final = lambda *args: None
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
@@ -220,6 +222,23 @@ class ImagePanel(QtWidgets.QWidget):
         self._flat_field.clicked.connect(self._set_flat_field)
         layout.addWidget(self._flat_field)
 
+        layout.addSpacing(20)
+        self._unexposed = ChecklistButtonModal('Unexposed', 'Select')
+        self._unexposed.clicked.connect(
+            functools.partial(
+                self._set_exposure, self._unexposed,
+                self._processor.set_unexposed))
+        self._unexposed.canceled.connect(self._cancel_image_pick)
+        layout.addWidget(self._unexposed)
+
+        self._exposed = ChecklistButtonModal('Exposed', 'Select')
+        self._exposed.clicked.connect(
+            functools.partial(
+                self._set_exposure, self._exposed,
+                self._processor.set_exposed))
+        self._exposed.canceled.connect(self._cancel_image_pick)
+        layout.addWidget(self._exposed)
+
         layout.addStretch()
 
         self.set_image(None)
@@ -239,7 +258,7 @@ class ImagePanel(QtWidgets.QWidget):
         self._set_enableds()
 
     def _set_enableds(self):
-        for w in [self._flat_field]:
+        for w in [self._flat_field, self._unexposed, self._exposed]:
             w.setEnabled(bool(self._image) and not self._input_busy)
 
         for ty, radio in zip(IMAGE_TYPES, self._image_type_buttons):
@@ -267,3 +286,40 @@ class ImagePanel(QtWidgets.QWidget):
             self._processor.set_flat_field(self._image)
             self._flat_field.setChecked(True)
         self._set_enableds()
+
+    def _cancel_image_pick(self):
+        self.start_image_pick.emit(False)
+
+    def _set_exposure(self, button, setter, checked):
+        if checked:
+            setter(None, None)
+            button.setChecked(False)
+        elif self._image:
+            self._image_picked_final = functools.partial(
+                self._image_picked_final_for, button, setter)
+            self.start_image_pick.emit(True)
+        self._set_enableds()
+
+    @QtCore.Slot(int, int, int, int)
+    def image_picked(self, x0, y0, x1, y1):
+        self._image_picked_final(x0, y0, x1, y1)
+
+    def _image_picked_final_for(self, button, setter, x0, y0, x1, y1):
+        if not self._image:
+            return
+
+        def clamp(a, m, n):
+            return min(max(a, m), n)
+
+        width, height = (self._image.width, self._image.height)
+        x0 = clamp(x0, 0, width)
+        x1 = clamp(x1, 0, width)
+        y0 = clamp(y0, 0, height)
+        y1 = clamp(y1, 0, height)
+
+        if x1 - x0 <= 0 or y1 - y0 <= 0:
+            return
+
+        patch = self._image.linear[y0:y1,x0:x1]
+        setter((x0, y0, x1, y1), patch)
+        button.setChecked(True)

@@ -26,6 +26,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._file_select.saved.connect(self._image_panel.save_image)
         self._file_select.input_busy.connect(self._input_busy)
         self._image_panel.image_changed.connect(self._image_view.set_image)
+        self._image_panel.start_image_pick.connect(
+            self._image_view.start_image_pick)
+        self._image_view.image_picked.connect(self._image_panel.image_picked)
 
         stack = QtWidgets.QVBoxLayout()
         panels = QtWidgets.QHBoxLayout()
