@@ -228,7 +228,18 @@ class ImagePanel(QtWidgets.QWidget):
         self._flat_field.clicked.connect(self._set_flat_field)
         layout.addWidget(self._flat_field)
 
-        layout.addSpacing(20)
+        gamma_layout = QtWidgets.QHBoxLayout()
+        layout.addLayout(gamma_layout)
+        gamma_layout.addWidget(QtWidgets.QLabel('Gamma'))
+        gamma = QtWidgets.QDoubleSpinBox()
+        gamma_layout.addWidget(gamma)
+        gamma.setStepType(
+            QtWidgets.QAbstractSpinBox.StepType.AdaptiveDecimalStepType)
+        gamma.setMinimum(0.01)
+        gamma.setMaximum(3.0)
+        gamma.valueChanged.connect(self._processor.set_gamma)
+        gamma.setValue(1.0)
+
         self._unexposed = ChecklistButtonModal('Unexposed', 'Select')
         self._unexposed.clicked.connect(
             functools.partial(
