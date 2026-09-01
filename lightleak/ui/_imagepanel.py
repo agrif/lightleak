@@ -191,9 +191,44 @@ class ChecklistButtonModal(ChecklistButton):
             super()._on_click()
 
 
+class SaveWorker(QtCore.QObject):
+    @dataclasses.dataclass
+    class SaveParams:
+        im: lightleak.image.Image
+        path: pathlib.Path
+        save_inverted: bool
+
+    output_busy = QtCore.Signal(SaveParams)
+
+    def __init__(self):
+        super().__init__()
+
+        self._thread = QtCore.QThread()
+        self.moveToThread(self._thread)
+        self._thread.start()
+
+    def stop(self):
+        self._thread.quit()
+
+    @QtCore.Slot(SaveParams)
+    def save_image(self, params):
+        self.output_busy.emit(True)
+        try:
+            params.im.save(params.path)
+            if params.save_inverted and params.im.inverted is not None:
+                params.im.save_inverted(params.path)
+        finally:
+            self.output_busy.emit(False)
+
+
 class ImagePanel(QtWidgets.QWidget):
     image_changed = QtCore.Signal(PIL.Image.Image)
     start_image_pick = QtCore.Signal(bool)
+    _start_save_image = QtCore.Signal(SaveWorker.SaveParams)
+
+    @property
+    def output_busy(self):
+        return self._worker.output_busy
 
     def __init__(self, processor):
         super().__init__()
@@ -203,6 +238,7 @@ class ImagePanel(QtWidgets.QWidget):
         self._image = None
         self._image_type = IMAGE_TYPES[0]
         self._image_picked_final = lambda *args: None
+        self._worker = SaveWorker()
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
@@ -268,7 +304,11 @@ class ImagePanel(QtWidgets.QWidget):
 
         layout.addStretch()
 
+        self._start_save_image.connect(self._worker.save_image)
         self.set_image(None)
+
+    def stop(self):
+        self._worker.stop()
 
     def _set_image_type(self, ty, checked):
         if not checked:
@@ -305,14 +345,14 @@ class ImagePanel(QtWidgets.QWidget):
 
     @QtCore.Slot(pathlib.Path)
     def save_image(self, path):
-        im = self._image
-        if not im:
+        if not self._image:
             return
 
-        im.save(path)
-
-        if self._save_inverted.isChecked() and im.inverted is not None:
-            im.save_inverted(path)
+        self._start_save_image.emit(SaveWorker.SaveParams(
+            im=self._image,
+            path=path,
+            save_inverted=self._save_inverted.isChecked(),
+        ))
 
     def _set_flat_field(self, checked):
         if checked:

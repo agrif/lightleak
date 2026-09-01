@@ -28,6 +28,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._image_panel.image_changed.connect(self._image_view.set_image)
         self._image_panel.start_image_pick.connect(
             self._image_view.start_image_pick)
+        self._image_panel.output_busy.connect(self._output_busy)
         self._image_view.image_picked.connect(self._image_panel.image_picked)
 
         stack = QtWidgets.QVBoxLayout()
@@ -55,8 +56,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event):
         self._capture_panel.stop()
         self._file_select.stop()
+        self._image_panel.stop()
 
     def _input_busy(self, busy):
         self._capture_panel.set_input_busy(busy)
         self._file_select.set_input_busy(busy)
         self._image_panel.set_input_busy(busy)
+
+    def _output_busy(self, busy):
+        self._file_select.set_output_busy(busy)

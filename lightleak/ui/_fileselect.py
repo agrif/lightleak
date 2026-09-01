@@ -61,6 +61,7 @@ class FileSelect(QtWidgets.QWidget):
         self._input_i = 0
 
         self._digit_re = re.compile(r'\d+')
+        self._output_busy = False
         self._output_path = None
         self._output_template = None
         self._output_i = None
@@ -106,6 +107,10 @@ class FileSelect(QtWidgets.QWidget):
 
     def set_input_busy(self, busy):
         self._input_busy = busy
+        self._set_enableds()
+
+    def set_output_busy(self, busy):
+        self._output_busy = busy
         self._set_enableds()
 
     def _add_row(self, layout, row, combo=False):
@@ -167,14 +172,18 @@ class FileSelect(QtWidgets.QWidget):
         self._input.action.setEnabled(
             bool(self._input_paths) and not self._input_busy)
 
+        self._output.open.setEnabled(not self._output_busy)
         self._output.left.setEnabled(
-            bool(self._output_path) and
+            bool(self._output_path) and not self._output_busy and
             self._output_i is not None and self._output_i > 0)
         self._output.right.setEnabled(
-            bool(self._output_path) and self._output_i is not None)
-        self._output.name.setEnabled(bool(self._output_path))
+            bool(self._output_path) and not self._output_busy and
+            self._output_i is not None)
+        self._output.name.setEnabled(
+            bool(self._output_path) and not self._output_busy)
         self._output.action.setEnabled(
-            bool(self._output_path) and not self._input_busy)
+            bool(self._output_path) and
+            not self._input_busy and not self._output_busy)
 
     def _open_input(self):
         paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
