@@ -262,6 +262,10 @@ class ImagePanel(QtWidgets.QWidget):
         self._unexposed.canceled.connect(self._cancel_image_pick)
         neg_layout.addWidget(self._unexposed)
 
+        self._save_inverted = QtWidgets.QCheckBox('Save Inverted')
+        self._save_inverted.setChecked(True)
+        neg_layout.addWidget(self._save_inverted)
+
         layout.addStretch()
 
         self.set_image(None)
@@ -290,6 +294,9 @@ class ImagePanel(QtWidgets.QWidget):
             if not en and radio.isChecked():
                 self._image_type_buttons[0].setChecked(True)
 
+        self._save_inverted.setEnabled(
+            bool(self._image) and self._image.inverted is not None)
+
     @QtCore.Slot(lightleak.image.Image)
     def set_image(self, image):
         self._image = image
@@ -298,8 +305,14 @@ class ImagePanel(QtWidgets.QWidget):
 
     @QtCore.Slot(pathlib.Path)
     def save_image(self, path):
-        if self._image:
-            self._image.save(path)
+        im = self._image
+        if not im:
+            return
+
+        im.save(path)
+
+        if self._save_inverted.isChecked() and im.inverted is not None:
+            im.save_inverted(path)
 
     def _set_flat_field(self, checked):
         if checked:
