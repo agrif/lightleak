@@ -1,6 +1,8 @@
+import concurrent.futures
 import functools
 import importlib.resources
 import io
+import os
 import pathlib
 import zlib
 
@@ -41,6 +43,11 @@ class PngChunkWriter(png.Writer):
 
 class Processor:
     def __init__(self):
+        self._workers = min(32, os.cpu_count())
+        self._min_chunk_size = 64
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._workers)
+
         self._flat_field = None
         self._unexposed = None
         self._unexposed_patch = None
@@ -110,7 +117,11 @@ class Processor:
         satpixels = numpy.max(srgbi, axis=-1)
         pixelmax = (1 << (8 * srgbi.dtype.itemsize)) - 1
         satpixels = satpixels >= pixelmax
-        linear = _srgb_to_lin(srgbi / pixelmax)
+
+        def process(rect, get_slice):
+            return _srgb_to_lin(get_slice(srgbi) / pixelmax)
+
+        linear = self._parallel_array(srgbi, process)
 
         return (linear, satpixels)
 
@@ -146,6 +157,29 @@ class Processor:
 
         self._unexposed = calc(self._unexposed_rect, self._unexposed_patch)
         self._exposed = calc(self._exposed_rect, self._exposed_patch)
+
+    def _parallel_array(self, arr, f):
+        height, width, *_ = arr.shape
+        chunksize = max(self._min_chunk_size, height // self._workers)
+
+        def iter_chunks():
+            y = 0
+            while y < height:
+                next_y = min(y + chunksize, height)
+                yield (0, y, width, next_y)
+                y = next_y
+
+        def iter_slice():
+            for rect in iter_chunks():
+                # funny business with a function to rebind rect
+                # to prevent it from changing inside the lambda
+                def slice_factory(r):
+                    x0, y0, x1, y1 = r
+                    return lambda arr: arr[y0:y1, x0:x1]
+                yield slice_factory(rect)
+
+        chunks = self._executor.map(f, iter_chunks(), iter_slice())
+        return numpy.vstack(list(chunks))
 
 
 class Image:
@@ -196,17 +230,28 @@ class Image:
 
         return self._linear[ys[0]:ys[1],xs[0]:xs[1]]
 
-    def _preview_linear(self, lin, autoscale=False):
-        if lin is None:
+    def _preview_linear(self, linear, autoscale=False):
+        if linear is None:
             return None
 
-        lin = lin.copy()
         if autoscale:
-            lin /= numpy.percentile(lin[numpy.isfinite(lin)], 99)
-        lin[~numpy.isfinite(lin)] = 1.0
-        srgb = _lin_to_srgb(numpy.maximum(lin, 0.0))
-        clipped = numpy.minimum(srgb, 1.0)
-        preview = numpy.round(0xff * clipped).astype(numpy.uint8)
+            # decimate before calculating 99'th percentile for speed
+            k = 3
+            small = linear[:-k:k, :-k:k]
+            scale = numpy.percentile(small[numpy.isfinite(small)], 99)
+        else:
+            scale = 1.0
+
+        def process(rect, get_slice):
+            lin = get_slice(linear).copy()
+            lin /= scale
+            lin[~numpy.isfinite(lin)] = 1.0
+            srgb = _lin_to_srgb(numpy.maximum(lin, 0.0))
+            clipped = numpy.minimum(srgb, 1.0)
+            preview = numpy.round(0xff * clipped).astype(numpy.uint8)
+            return preview
+
+        preview = self._processor._parallel_array(linear, process)
         return PIL.Image.fromarray(preview)
 
     @functools.cached_property
@@ -264,17 +309,22 @@ class Image:
         # convert to densities
         unexposed = -numpy.log10(unexposed)
         exposed = -numpy.log10(exposed)
-        density = -numpy.log10(source)
 
-        # scale density to [0, 1]
-        density = (density - unexposed) / (exposed - unexposed)
-        density = numpy.clip(density, 0, 1)
+        def process(rect, get_slice):
+            # convert this to density
+            density = -numpy.log10(get_slice(source))
 
-        # film curve, scaled to [0, 1]
-        linear = numpy.power(10, density * gamma) - 1
-        linear /= numpy.power(10, gamma) - 1
+            # scale density to [0, 1]
+            density = (density - unexposed) / (exposed - unexposed)
+            density = numpy.clip(density, 0, 1)
 
-        return linear
+            # film curve, scaled to [0, 1]
+            linear = numpy.power(10, density * gamma) - 1
+            linear /= numpy.power(10, gamma) - 1
+
+            return linear
+
+        return self._processor._parallel_array(source, process)
 
     @functools.cached_property
     def inverted_preview(self):
