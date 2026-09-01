@@ -40,6 +40,7 @@ class ImageWorker(QtCore.QObject):
             im = self._processor.open(path)
         except Exception:
             self.loaded.emit(None)
+            raise
         else:
             self.loaded.emit(im)
 
