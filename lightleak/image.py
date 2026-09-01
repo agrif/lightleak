@@ -1,10 +1,13 @@
 import functools
+import importlib.resources
 import io
 import pathlib
+import zlib
 
 import numpy
 import PIL.Image
 import PIL.ImageFilter
+import png
 import rawpy
 
 
@@ -22,6 +25,18 @@ def _lin_to_srgb(lin):
         lin * 12.92,
         1.055 * pow(lin, 0.41666) - 0.055,
     )
+
+
+class PngChunkWriter(png.Writer):
+    def __init__(self, extra_chunks=[], **kwargs):
+        super().__init__(**kwargs)
+        self._extra_chunks = extra_chunks
+
+    def write_preamble(self, outfile):
+        super().write_preamble(outfile)
+
+        for chunk in self._extra_chunks:
+            png.write_chunk(outfile, *chunk)
 
 
 class Processor:
@@ -191,7 +206,7 @@ class Image:
         lin[~numpy.isfinite(lin)] = 1.0
         srgb = _lin_to_srgb(numpy.maximum(lin, 0.0))
         clipped = numpy.minimum(srgb, 1.0)
-        preview = numpy.round(255 * clipped).astype(numpy.uint8)
+        preview = numpy.round(0xff * clipped).astype(numpy.uint8)
         return PIL.Image.fromarray(preview)
 
     @functools.cached_property
@@ -234,7 +249,7 @@ class Image:
         return self._preview_linear(self._flat_corrected, autoscale=True)
 
     @functools.cached_property
-    def _inverted(self):
+    def inverted(self):
         unexposed = self._processor._unexposed
         exposed = self._processor._exposed
         gamma = self._processor._gamma
@@ -263,4 +278,39 @@ class Image:
 
     @functools.cached_property
     def inverted_preview(self):
-        return self._preview_linear(self._inverted)
+        return self._preview_linear(self.inverted)
+
+    def save_inverted(self, path, linear=True):
+        inv = self.inverted.copy()
+        inv[~numpy.isfinite(inv)] = 1.0
+        if linear:
+            inv = numpy.clip(inv, 0.0, 1.0)
+        else:
+            inv = _lin_to_srgb(numpy.maximum(inv, 0.0))
+            inv = numpy.minimum(inv, 1.0)
+        inv_i = numpy.round(0xffff * inv).astype(numpy.uint16)
+
+        if linear:
+            icc_filename = 'sRGB-elle-V2-g10.icc'
+            gamma = 1.0
+        else:
+            icc_filename = 'sRGB-elle-V2-g22.icc'
+            gamma = 1.0 / 2.2
+
+        files = importlib.resources.files()
+        icc = files.joinpath('icc').joinpath(icc_filename).read_bytes()
+        icc_name_s = icc_filename
+        icc_name = icc_name_s.strip().encode('latin-1', errors='replace')[:79]
+        icc_chunk = (b'iCCP', icc_name + b'\0\0' + zlib.compress(icc))
+
+        w = PngChunkWriter(
+            width=self.width,
+            height=self.height,
+            bitdepth=16,
+            greyscale=False,
+            gamma=gamma,
+            extra_chunks=[icc_chunk],
+        )
+
+        with open(str(path) + '.inv.png', 'wb') as f:
+            w.write_array(f, inv_i.flatten('C'))
