@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import pathlib
+import time
 import typing
 
 import PIL.Image
@@ -145,6 +146,8 @@ class ChecklistButtonModal(ChecklistButton):
     def __init__(self, label_text):
         super().__init__(label_text)
 
+        self._canceled_time = time.time()
+
         app = QtWidgets.QApplication.instance()
         app.installEventFilter(self)
 
@@ -178,11 +181,18 @@ class ChecklistButtonModal(ChecklistButton):
         if cancel and self._button.isChecked():
             self._button.setChecked(False)
             self._update_button()
+            self._canceled_time = time.time()
             self.canceled.emit()
 
         return False
 
     def _on_click(self, toggled):
+        # no good very bad hack: ignore events after an eventFilter cancel
+        # for a very short time
+        if time.time() < self._canceled_time + 0.1:
+            self._button.setChecked(False)
+            return
+
         checkable = self._button.isCheckable()
         self._update_button()
         if checkable and not toggled:
