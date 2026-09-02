@@ -11,6 +11,7 @@ import PIL.Image
 import PIL.ImageFilter
 import png
 import rawpy
+import scipy.ndimage
 
 
 def _srgb_to_lin(srgb):
@@ -266,7 +267,46 @@ class Image:
 
     @functools.cached_property
     def focus(self):
-        return self.preview.convert('L').filter(PIL.ImageFilter.FIND_EDGES)
+        colormap = numpy.array([
+            [0.0, 0.0, 0.0, 0.0, 0.0],
+            [1.9, 0.0, 0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0, 1.0, 1.0],
+            [4.0, 0.0, 1.0, 0.0, 1.0],
+            [6.0, 1.0, 1.0, 0.0, 1.0],
+        ])
+
+        # doing this in parallel breaks it into strips which technically
+        # changes the convolutions, but this is acceptable for focus preview
+
+        def process_mag(rect, get_slice):
+            lin = get_slice(self.linear)
+            mono = lin @ numpy.array([0.2125, 0.7154, 0.0721])
+            mono = scipy.ndimage.gaussian_filter(mono, 2.0)
+
+            xs = scipy.ndimage.sobel(mono, axis=0, mode='nearest')
+            ys = scipy.ndimage.sobel(mono, axis=1, mode='nearest')
+
+            mag = numpy.sqrt(xs * xs + ys * ys)
+            return mag
+
+        magnitude = self._processor._parallel_array(self.linear, process_mag)
+        std = numpy.std(magnitude)
+
+        def process_color(rect, get_slice):
+            mag = get_slice(magnitude) / std
+
+            color = numpy.zeros((*mag.shape, 4), dtype=mag.dtype)
+            color[:, :, 0] = numpy.interp(mag, colormap[:, 0], colormap[:, 1])
+            color[:, :, 1] = numpy.interp(mag, colormap[:, 0], colormap[:, 2])
+            color[:, :, 2] = numpy.interp(mag, colormap[:, 0], colormap[:, 3])
+            color[:, :, 3] = numpy.interp(mag, colormap[:, 0], colormap[:, 4])
+
+            colori = numpy.round(0xff * color).astype(numpy.uint8)
+            return colori
+
+        colori = self._processor._parallel_array(magnitude, process_color)
+        focus = PIL.Image.fromarray(colori, 'RGBA')
+        return PIL.Image.alpha_composite(self.preview.convert('RGBA'), focus)
 
     @classmethod
     def _flat_correct(cls, lin, flat):
