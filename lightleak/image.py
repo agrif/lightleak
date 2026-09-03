@@ -358,6 +358,32 @@ class Image:
             density = (density - unexposed) / (exposed - unexposed)
             density = numpy.clip(density, 0, 1)
 
+            # Film reacts to exposure E by creating density D according to
+            # a curve that is *approximately* linear between log_10 E and D.
+            # If that slope is gamma, then
+            #     gamma * (D1 - D0) = log_10 E1 - log_10 E0,
+            #     gamma * (D1 - D0) = log_10 (E1 / E0)
+            #
+            # We will rescale the resulting E anyway, so we will arbitrarily
+            # work in units where an E = 1 exposure creates a D = 1 density.
+            # Using that for D0 and E0,
+            #     gamma * (D1 - 1) = log_10 E1,
+            #     E1 = 10 ^ (gamma * D1 - gamma)
+            # From now on we will drop the 1 subscripts and use plain D and E.
+            #
+            # We will use E directly for the linear image output, but first
+            # it needs to be scaled so that E is in [0, 1] for D in [0, 1].
+            # First, subtract off the value when D = 0 to force E = 0,
+            #     E = 10 ^ (gamma * D - gamma) - 10 ^ -gamma,
+            #     E = 10 ^ -gamma * (10 ^ (gamma * D) - 1).
+            # Now, divide by the value of that when D = 1 to force E = 1,
+            #     E = (10 ^ (gamma * D) - 1) / (10 ^ gamma - 1).
+            #
+            # This is what we use to calculate the linear image. Note that
+            # (much like digital gamma) some texts choose to use gamma to
+            # denote D / log_10 E, rather than log_10 E / D as we do here,
+            # confusing e.g. gamma = 1.0 / 2.2 vs gamma = 2.2.
+
             # film curve, scaled to [0, 1]
             linear = numpy.power(10, density * gamma) - 1
             linear /= numpy.power(10, gamma) - 1
