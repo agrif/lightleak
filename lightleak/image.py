@@ -49,6 +49,8 @@ class Processor:
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=self._workers)
 
+        self._demosaic_algorithm = rawpy.DemosaicAlgorithm.DHT
+
         self._flat_field = None
         self._unexposed = None
         self._unexposed_patch = None
@@ -84,6 +86,7 @@ class Processor:
             raw = rawpy.imread(f)
 
         linear = raw.postprocess(
+            demosaic_algorithm=self._demosaic_algorithm,
             output_color=rawpy.ColorSpace.raw,
             output_bps=16,
             user_flip=0,
