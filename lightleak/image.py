@@ -349,14 +349,15 @@ class Image:
         # convert to densities
         unexposed = -numpy.log10(unexposed)
         exposed = -numpy.log10(exposed)
+        dmax = exposed - unexposed
 
         def process(rect, get_slice):
             # convert this to density
             density = -numpy.log10(get_slice(source))
 
-            # scale density to [0, 1]
-            density = (density - unexposed) / (exposed - unexposed)
-            density = numpy.clip(density, 0, 1)
+            # calculate relative density
+            density = density - unexposed
+            density = numpy.clip(density, 0, dmax)
 
             # Film reacts to exposure E by creating density D according to
             # a curve that is *approximately* linear between log_10 E and D.
@@ -372,12 +373,12 @@ class Image:
             # From now on we will drop the 1 subscripts and use plain D and E.
             #
             # We will use E directly for the linear image output, but first
-            # it needs to be scaled so that E is in [0, 1] for D in [0, 1].
+            # it needs to be scaled so that E is in [0, 1] for D in [0, Dmax].
             # First, subtract off the value when D = 0 to force E = 0,
             #     E = 10 ^ (gamma * D - gamma) - 10 ^ -gamma,
             #     E = 10 ^ -gamma * (10 ^ (gamma * D) - 1).
-            # Now, divide by the value of that when D = 1 to force E = 1,
-            #     E = (10 ^ (gamma * D) - 1) / (10 ^ gamma - 1).
+            # Now, divide by the value of that when D = Dmax to force E = 1,
+            #     E = (10 ^ (gamma * D) - 1) / (10 ^ (gamma * Dmax) - 1).
             #
             # This is what we use to calculate the linear image. Note that
             # (much like digital gamma) some texts choose to use gamma to
@@ -386,7 +387,7 @@ class Image:
 
             # film curve, scaled to [0, 1]
             linear = numpy.power(10, density * gamma) - 1
-            linear /= numpy.power(10, gamma) - 1
+            linear /= numpy.power(10, dmax * gamma) - 1
 
             return linear
 
