@@ -15,19 +15,20 @@ import scipy.ndimage
 
 
 def _srgb_to_lin(srgb):
-    return numpy.where(
-        srgb <= 0.04045,
-        srgb * 0.0773993808,
-        pow(srgb * 0.9478672986 + 0.0521327014, 2.4),
-    )
+    linear_part = srgb <= 0.04045
+    lin = srgb * 0.0773993808
+    numpy.pow(srgb * 0.9478672986 + 0.0521327014, 2.4,
+              out=lin, where=~linear_part)
+    return lin
 
 
 def _lin_to_srgb(lin):
-    return numpy.where(
-        lin <= 0.0031308,
-        lin * 12.92,
-        1.055 * pow(lin, 0.41666) - 0.055,
-    )
+    linear_part = lin <= 0.0031308
+    srgb = lin * 12.92
+    numpy.pow(lin, 0.41666, out=srgb, where=~linear_part)
+    numpy.multiply(srgb, 1.055, out=srgb, where=~linear_part)
+    numpy.subtract(srgb, 0.055, out=srgb, where=~linear_part)
+    return srgb
 
 
 class PngChunkWriter(png.Writer):
@@ -250,9 +251,8 @@ class Image:
         def process(rect, get_slice):
             lin = get_slice(linear).copy()
             lin /= scale
-            lin[~numpy.isfinite(lin)] = 1.0
-            srgb = _lin_to_srgb(numpy.maximum(lin, 0.0))
-            clipped = numpy.minimum(srgb, 1.0)
+            srgb = _lin_to_srgb(lin)
+            clipped = numpy.clip(srgb, 0.0, 1.0)
             preview = numpy.round(0xff * clipped).astype(numpy.uint8)
             return preview
 
@@ -318,12 +318,9 @@ class Image:
         if lin.shape != flat.shape:
             return lin
 
-        corrected = numpy.divide(
-            lin, flat,
-            out=numpy.zeros_like(lin),
-            where=flat != 0,
-        )
-        corrected[flat == 0] = numpy.inf
+        flat_valid = flat > 0
+        corrected = numpy.maximum(lin, 0.0) / numpy.maximum(flat, 1e-9)
+        corrected[~flat_valid & (corrected > 0)] = numpy.inf
         return corrected
 
     @functools.cached_property
@@ -351,14 +348,26 @@ class Image:
         if source is None:
             source = self._linear
 
+        # a log10(x) that returns -inf for x <= 0
+        def intensity_to_density(i_over_i0):
+            i_over_i0 = numpy.array(i_over_i0, dtype=numpy.float32)
+            valid = i_over_i0 > 0
+            d = -numpy.log10(
+                i_over_i0,
+                out=numpy.zeros_like(i_over_i0),
+                where=valid,
+            )
+            d[~valid] = -numpy.inf
+            return d
+
         # convert to densities
-        unexposed = -numpy.log10(unexposed)
-        exposed = -numpy.log10(exposed)
+        unexposed = intensity_to_density(unexposed)
+        exposed = intensity_to_density(exposed)
         dmax = exposed - unexposed
 
         def process(rect, get_slice):
             # convert this to density
-            density = -numpy.log10(get_slice(source))
+            density = intensity_to_density(get_slice(source))
 
             # calculate relative density
             density = density - unexposed
@@ -404,12 +413,9 @@ class Image:
 
     def save_inverted(self, path, linear=True):
         inv = self.inverted.copy()
-        inv[~numpy.isfinite(inv)] = 1.0
-        if linear:
-            inv = numpy.clip(inv, 0.0, 1.0)
-        else:
-            inv = _lin_to_srgb(numpy.maximum(inv, 0.0))
-            inv = numpy.minimum(inv, 1.0)
+        if not linear:
+            inv = _lin_to_srgb(inv)
+        inv = numpy.clip(inv, 0.0, 1.0)
         inv_i = numpy.round(0xffff * inv).astype(numpy.uint16)
 
         if linear:
