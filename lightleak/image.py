@@ -96,9 +96,9 @@ class Processor:
             [3.2404542, -1.5371385, -0.4985314],
             [-0.9692660, 1.8760108, 0.0415560],
             [0.0556434, -0.2040259, 1.0572252],
-        ])
+        ], dtype=numpy.float32)
 
-        xyz_to_cam = raw.rgb_xyz_matrix[0:3, 0:3]
+        xyz_to_cam = raw.rgb_xyz_matrix[0:3, 0:3].astype(numpy.float32)
         convert = xyz_to_srgb @ numpy.linalg.inv(xyz_to_cam)
         linear = linear @ convert.T
 
@@ -120,7 +120,8 @@ class Processor:
         satpixels = satpixels >= pixelmax
 
         def process(rect, get_slice):
-            return _srgb_to_lin(get_slice(srgbi) / pixelmax)
+            srgb = get_slice(srgbi).astype(numpy.float32) / pixelmax
+            return _srgb_to_lin(srgb)
 
         linear = self._parallel_array(srgbi, process)
 
@@ -273,14 +274,15 @@ class Image:
             [2.0, 0.0, 0.0, 1.0, 1.0],
             [4.0, 0.0, 1.0, 0.0, 1.0],
             [6.0, 1.0, 1.0, 0.0, 1.0],
-        ])
+        ], dtype=numpy.float32)
 
         # doing this in parallel breaks it into strips which technically
         # changes the convolutions, but this is acceptable for focus preview
 
         def process_mag(rect, get_slice):
             lin = get_slice(self.linear)
-            mono = lin @ numpy.array([0.2125, 0.7154, 0.0721])
+            mono = lin @ numpy.array([0.2125, 0.7154, 0.0721],
+                                     dtype=numpy.float32)
             mono = scipy.ndimage.gaussian_filter(mono, 2.0)
 
             xs = scipy.ndimage.sobel(mono, axis=0, mode='nearest')
