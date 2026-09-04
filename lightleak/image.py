@@ -31,6 +31,16 @@ def _lin_to_srgb(lin):
     return srgb
 
 
+_xyz_to_srgb = numpy.array([
+    [3.2404542, -1.5371385, -0.4985314],
+    [-0.9692660, 1.8760108, 0.0415560],
+    [0.0556434, -0.2040259, 1.0572252],
+], dtype=numpy.float32)
+
+
+_srgb_to_mono = numpy.array([0.2125, 0.7154, 0.0721], dtype=numpy.float32)
+
+
 class PngChunkWriter(png.Writer):
     def __init__(self, extra_chunks=[], **kwargs):
         super().__init__(**kwargs)
@@ -96,14 +106,8 @@ class Processor:
             gamma=(1, 1),
         )
 
-        xyz_to_srgb = numpy.array([
-            [3.2404542, -1.5371385, -0.4985314],
-            [-0.9692660, 1.8760108, 0.0415560],
-            [0.0556434, -0.2040259, 1.0572252],
-        ], dtype=numpy.float32)
-
         xyz_to_cam = raw.rgb_xyz_matrix[0:3, 0:3].astype(numpy.float32)
-        convert = xyz_to_srgb @ numpy.linalg.inv(xyz_to_cam)
+        convert = _xyz_to_srgb @ numpy.linalg.inv(xyz_to_cam)
         linear = linear @ convert.T
 
         satpixels = raw.raw_image_visible
@@ -284,8 +288,7 @@ class Image:
 
         def process_mag(rect, get_slice):
             lin = get_slice(self.linear)
-            mono = lin @ numpy.array([0.2125, 0.7154, 0.0721],
-                                     dtype=numpy.float32)
+            mono = lin @ _srgb_to_mono
             mono = scipy.ndimage.gaussian_filter(mono, 2.0)
 
             xs = scipy.ndimage.sobel(mono, axis=0, mode='nearest')
