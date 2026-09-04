@@ -402,9 +402,15 @@ class Image:
             # denote D / log_10 E, rather than log_10 E / D as we do here,
             # confusing e.g. gamma = 1.0 / 2.2 vs gamma = 2.2.
 
+            # White point correction, assume that roughly white light
+            # (same exposure in all primaries) created dmax, which changes
+            # gamma so 10 ^ (gamma_p * dmax) is the same in all channels.
+            # Normalize so gamma[0] == gamma_p[0].
+            gamma_p = gamma / (dmax / dmax[0])
+
             # film curve, scaled to [0, 1]
-            linear = numpy.power(10, density * gamma) - 1
-            linear /= numpy.power(10, dmax * gamma) - 1
+            linear = numpy.power(10, density * gamma_p) - 1
+            linear /= numpy.power(10, dmax * gamma_p) - 1
 
             return linear
 
