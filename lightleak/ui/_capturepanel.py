@@ -152,6 +152,7 @@ class CameraWorker(QtCore.QObject):
 class CapturePanel(QtWidgets.QWidget):
     _change_setting = QtCore.Signal(str, str)
     input_busy = QtCore.Signal(bool)
+    _connect = QtCore.Signal()
 
     @property
     def captured(self):
@@ -194,7 +195,8 @@ class CapturePanel(QtWidgets.QWidget):
         self._worker.error.connect(self._error)
         self._worker.setting_changed.connect(self._setting_changed)
 
-        self._connect_button.clicked.connect(self._worker.connect)
+        self._connect_button.clicked.connect(self._connect_clicked)
+        self._connect.connect(self._worker.connect)
         self._capture_button.clicked.connect(self._worker.capture)
         self._change_setting.connect(self._worker.change_setting)
         self._state_changed(CameraWorker.State.DISCONNECTED)
@@ -205,6 +207,18 @@ class CapturePanel(QtWidgets.QWidget):
     def set_input_busy(self, busy):
         self._input_busy = busy
         self._capture_button.setEnabled(not busy and self._connected)
+
+    def _connect_clicked(self):
+        if self._connected:
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                f'Disconnect Camera?',
+                f'Are you sure you want to disconnect from the camera?',
+            )
+            if answer & QtWidgets.QMessageBox.StandardButtons.Yes:
+                self._connect.emit()
+        else:
+            self._connect.emit()
 
     @QtCore.Slot(CameraWorker.State)
     def _state_changed(self, state):
