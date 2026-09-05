@@ -262,7 +262,7 @@ class FileSelect(QtWidgets.QWidget):
         if name is None:
             name = self._output.name.text()
         if not name:
-            name = 'capture-00'
+            name = '00'
 
         start = end = len(name)
         digits = ''
