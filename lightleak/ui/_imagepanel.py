@@ -259,6 +259,8 @@ class ImagePanel(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
+        margins = layout.getContentsMargins()
+        layout.setContentsMargins(margins[0], 0, margins[2], 0)
 
         display_box = QtWidgets.QGroupBox('Image Preview')
         layout.addWidget(display_box)

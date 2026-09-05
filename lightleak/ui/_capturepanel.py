@@ -167,6 +167,8 @@ class CapturePanel(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
+        margins = layout.getContentsMargins()
+        layout.setContentsMargins(margins[0], 0, margins[2], 0)
 
         self._capture_button = QtWidgets.QPushButton('Capture')
         layout.addWidget(self._capture_button)
