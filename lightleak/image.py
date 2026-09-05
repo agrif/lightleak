@@ -351,31 +351,18 @@ class Image:
         if source is None:
             source = self._linear
 
-        # a log10(x) that returns -inf for x <= 0
-        def intensity_to_density(i_over_i0):
-            i_over_i0 = numpy.array(i_over_i0, dtype=numpy.float32)
-            valid = i_over_i0 > 0
-            d = -numpy.log10(
-                i_over_i0,
-                out=numpy.zeros_like(i_over_i0),
-                where=valid,
-            )
-            d[~valid] = -numpy.inf
-            return d
-
         # convert to densities
-        unexposed = intensity_to_density(unexposed)
-        exposed = intensity_to_density(exposed)
-        dmax = exposed - unexposed
+        unexposed_d = -numpy.log10(unexposed)
+        exposed_d = -numpy.log10(exposed)
+        dmax = exposed_d - unexposed_d
+
+        # White point correction, assume that roughly white light
+        # (same exposure in all primaries) created dmax, which changes
+        # gamma so 10 ^ (gamma_p * dmax) is the same in all channels.
+        # Normalize so gamma[0] == gamma_p[0].
+        gamma_p = gamma / (dmax / dmax[0])
 
         def process(rect, get_slice):
-            # convert this to density
-            density = intensity_to_density(get_slice(source))
-
-            # calculate relative density
-            density = density - unexposed
-            density = numpy.clip(density, 0, dmax)
-
             # Film reacts to exposure E by creating density D according to
             # a curve that is *approximately* linear between log_10 E and D.
             # If that slope is gamma, then
@@ -394,23 +381,33 @@ class Image:
             # First, subtract off the value when D = 0 to force E = 0,
             #     E = 10 ^ (gamma * D - gamma) - 10 ^ -gamma,
             #     E = 10 ^ -gamma * (10 ^ (gamma * D) - 1).
-            # Now, divide by the value of that when D = Dmax to force E = 1,
-            #     E = (10 ^ (gamma * D) - 1) / (10 ^ (gamma * Dmax) - 1).
+            # The overall factor of 10 ^ -gamma isn't important, since the
+            # units for E are arbitrary, so
+            #     E = 10 ^ (gamma * D) - 1.
+            #
+            # Density here is D = -log10 (I / I0), where I is the
+            # intensity and I0 is the unexposed intensity. Using that,
+            #     E = 10 ^ (gamma * -log10 (I / I0)) - 1,
+            #     E = 10 ^ (gamma * log10 (I0 / I)) - 1,
+            #     E = 10 ^ log10 ((I0 / I) ^ gamma) - 1,
+            #     E = (I0 / I) ^ gamma - 1.
+            #
+            # Now, divide by the value of that when D = Dmax to force E = 1.
+            # Dmax = -log10 (Imax / I0), where Imax is the exposed intensity.
+            # Therefore,
+            #     E = ((I0 / I) ^ gamma - 1) / ((I0 / Imax) ^ gamma - 1).
             #
             # This is what we use to calculate the linear image. Note that
             # (much like digital gamma) some texts choose to use gamma to
             # denote D / log_10 E, rather than log_10 E / D as we do here,
             # confusing e.g. gamma = 1.0 / 2.2 vs gamma = 2.2.
 
-            # White point correction, assume that roughly white light
-            # (same exposure in all primaries) created dmax, which changes
-            # gamma so 10 ^ (gamma_p * dmax) is the same in all channels.
-            # Normalize so gamma[0] == gamma_p[0].
-            gamma_p = gamma / (dmax / dmax[0])
+            # clip src at maximum exposure from below to avoid zeros.
+            src = numpy.maximum(get_slice(source), exposed)
 
             # film curve, scaled to [0, 1]
-            linear = numpy.power(10, density * gamma_p) - 1
-            linear /= numpy.power(10, dmax * gamma_p) - 1
+            linear = numpy.power(unexposed / src, gamma_p) - 1
+            linear /= numpy.power(unexposed / exposed, gamma_p) - 1
 
             return linear
 
