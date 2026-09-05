@@ -168,11 +168,15 @@ class CapturePanel(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
 
-        layout.addWidget(QtWidgets.QLabel('Camera Capture'))
+        self._capture_button = QtWidgets.QPushButton('Capture')
+        layout.addWidget(self._capture_button)
 
-        self._connect_button = QtWidgets.QPushButton('Connect')
-        layout.addWidget(self._connect_button)
         layout.addSpacing(20)
+        settings_box = QtWidgets.QGroupBox('Capture Settings')
+        layout.addWidget(settings_box)
+        settings_layout = QtWidgets.QVBoxLayout()
+        settings_box.setLayout(settings_layout)
+
         self._settings = {}
         for setting in SETTINGS:
             label = QtWidgets.QLabel(setting.label)
@@ -182,12 +186,15 @@ class CapturePanel(QtWidgets.QWidget):
                 combo = QtWidgets.QComboBox()
             combo.currentTextChanged.connect(
                 functools.partial(self._set_setting, setting.name))
-            layout.addWidget(label)
-            layout.addWidget(combo)
+            settings_layout.addWidget(label)
+            settings_layout.addWidget(combo)
             self._settings[setting.name] = setting.with_widgets([label, combo])
+
+        layout.addSpacing(20)
+        self._connect_button = QtWidgets.QPushButton('Connect')
+        layout.addWidget(self._connect_button)
+
         layout.addStretch()
-        self._capture_button = QtWidgets.QPushButton('Capture')
-        layout.addWidget(self._capture_button)
 
         self._worker = CameraWorker(processor)
 
