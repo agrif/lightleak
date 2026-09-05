@@ -8,7 +8,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
 
         self.setWindowTitle('lightleak')
-        self.setMinimumSize(800, 600)
+        height = 600
+        self.setMinimumSize(int(round(16 * height / 9)), height)
 
         status_bar = QtWidgets.QStatusBar(self)
         self.setStatusBar(status_bar)
