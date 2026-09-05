@@ -241,6 +241,7 @@ class ImagePanel(QtWidgets.QWidget):
     image_changed = QtCore.Signal(PIL.Image.Image)
     start_image_pick = QtCore.Signal(bool)
     image_flipped = QtCore.Signal(bool)
+    image_histogram = QtCore.Signal(bool)
     _start_save_image = QtCore.Signal(SaveWorker.SaveParams)
 
     @property
@@ -278,9 +279,13 @@ class ImagePanel(QtWidgets.QWidget):
             self._image_type_buttons.append(radio)
 
         display_layout.addSpacing(10)
+
         flipped = QtWidgets.QCheckBox('Flip Horizontally')
         flipped.toggled.connect(self.image_flipped)
         display_layout.addWidget(flipped)
+        histogram = QtWidgets.QCheckBox('Show Histogram')
+        histogram.toggled.connect(self.image_histogram)
+        display_layout.addWidget(histogram)
 
         layout.addSpacing(20)
 
