@@ -163,7 +163,8 @@ class Processor:
             else:
                 corrected = patch
 
-            return numpy.mean(corrected, axis=(0, 1))
+            return numpy.mean(corrected, axis=(0, 1),
+                              where=numpy.isfinite(corrected))
 
         self._unexposed = calc(self._unexposed_rect, self._unexposed_patch)
         self._exposed = calc(self._exposed_rect, self._exposed_patch)
