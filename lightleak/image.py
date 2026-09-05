@@ -79,14 +79,14 @@ class Processor:
     def load_bytes(self, data, extension=''):
         for loader in [self._load_raw, self._load_pillow]:
             try:
-                linear, satpixels = loader(data)
+                linear, camspace, satpixels = loader(data)
                 break
             except Exception:
                 continue
         else:
             raise RuntimeError('no loader for image')
 
-        return Image(self, data, extension, linear, satpixels)
+        return Image(self, data, extension, linear, camspace, satpixels)
 
     def load(self, f, extension=''):
         data = f.read()
@@ -96,7 +96,7 @@ class Processor:
         with io.BytesIO(data) as f:
             raw = rawpy.imread(f)
 
-        linear = raw.postprocess(
+        camspace = raw.postprocess(
             demosaic_algorithm=self._demosaic_algorithm,
             output_color=rawpy.ColorSpace.raw,
             output_bps=16,
@@ -108,7 +108,7 @@ class Processor:
 
         xyz_to_cam = raw.rgb_xyz_matrix[0:3, 0:3].astype(numpy.float32)
         convert = _xyz_to_srgb @ numpy.linalg.inv(xyz_to_cam)
-        linear = linear @ convert.T
+        linear = camspace @ convert.T
 
         satpixels = raw.raw_image_visible
         white_level = raw.white_level
@@ -117,7 +117,7 @@ class Processor:
             satpixels = numpy.max(satpixels, axis=-1)
         satpixels = satpixels >= white_level
 
-        return (linear / white_level, satpixels)
+        return (linear / white_level, camspace / white_level, satpixels)
 
     def _load_pillow(self, data):
         with io.BytesIO(data) as f:
@@ -133,7 +133,7 @@ class Processor:
 
         linear = self._parallel_array(srgbi, process)
 
-        return (linear, satpixels)
+        return (linear, linear, satpixels)
 
     def set_flat_field(self, im):
         self._flat_field = im
@@ -194,14 +194,17 @@ class Processor:
 
 
 class Image:
-    def __init__(self, processor, data, extension, linear, satpixels):
+    def __init__(self, processor, data, extension,
+                 linear, camspace, satpixels):
         self._processor = processor
         self._data = data
         self._extension = extension
         self._linear = linear
+        self._camspace = camspace
         self._satpixels = satpixels
 
         # preload some properties
+        self.histogram
         self.preview
         self.clipped
         self.focus
@@ -227,6 +230,35 @@ class Image:
     @property
     def linear(self):
         return self._linear
+
+    @functools.cached_property
+    def histogram(self):
+        hists = []
+        colors = []
+
+        # primaries
+        for i in range(3):
+            hist, edges = numpy.histogram(self._camspace[:, :, i],
+                                          bins=256, range=(0, 1))
+            hists.append(hist)
+            color = [0.0] * 3
+            color[i] = 1.0
+            colors.append(color)
+
+        # secondaries
+        for i in range(3):
+            secondary = hists[:3]
+            del secondary[i]
+            hists.append(numpy.minimum(*secondary))
+            color = [1.0] * 3
+            color[i] = 0.0
+            colors.append(color)
+
+        # # white
+        hists.append(numpy.minimum(numpy.minimum(*hists[:2]), hists[2]))
+        colors.append([1.0] * 3)
+
+        return hists, colors, edges
 
     def linear_patch(self, x0, y0, x1, y1):
         def clamp(a, m, n):
