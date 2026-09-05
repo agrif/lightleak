@@ -15,6 +15,7 @@ class ImageView(QtWidgets.QGraphicsView):
 
         self._has_image = False
         self._zoom = 0
+        self._flipped = False
 
         self._scene = QtWidgets.QGraphicsScene(self)
         self._image = QtWidgets.QGraphicsPixmapItem()
@@ -62,6 +63,11 @@ class ImageView(QtWidgets.QGraphicsView):
         )
         factor *= scale
         self.scale(factor, factor)
+
+    def set_flipped(self, flipped):
+        if flipped != self._flipped:
+            self.scale(-1, 1)
+        self._flipped = flipped
 
     @QtCore.Slot(PIL.Image.Image)
     def set_image(self, im):

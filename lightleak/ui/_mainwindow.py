@@ -29,6 +29,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._image_panel.start_image_pick.connect(
             self._image_view.start_image_pick)
         self._image_panel.output_busy.connect(self._output_busy)
+        self._image_panel.image_flipped.connect(self._image_view.set_flipped)
         self._image_view.image_picked.connect(self._image_panel.image_picked)
 
         stack = QtWidgets.QVBoxLayout()
