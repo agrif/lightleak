@@ -228,12 +228,15 @@ class CapturePanel(QtWidgets.QWidget):
             self._connected = False
             self._status_bar.showMessage(f'Camera disconnected.')
             self._connect_button.setText('Connect')
+            self._connect_button.setEnabled(True)
             self._capture_button.setEnabled(False)
             for setting in self._settings.values():
                 for widget in setting.widgets:
                     widget.setEnabled(False)
         elif state in [CameraWorker.State.BUSY, CameraWorker.State.CONNECTING]:
             self._connect_button.setText('Disconnect')
+            self._connect_button.setEnabled(
+                state != CameraWorker.State.CONNECTING)
             self._capture_button.setEnabled(False)
             for setting in self._settings.values():
                 for widget in setting.widgets:
@@ -245,6 +248,7 @@ class CapturePanel(QtWidgets.QWidget):
                 self._status_bar.showMessage(f'Connected to {name} on {port}.')
             self._connected = True
             self._connect_button.setText('Disconnect')
+            self._connect_button.setEnabled(True)
             self._capture_button.setEnabled(not self._input_busy)
             for setting in self._settings.values():
                 for widget in setting.widgets:
