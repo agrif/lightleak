@@ -418,12 +418,15 @@ class Image:
     def inverted_preview(self):
         return self._preview_linear(self.inverted)
 
-    def save_inverted(self, path, linear=True):
+    def save_inverted(self, path, linear=True, flip=False):
         inv = self.inverted.copy()
         if not linear:
             inv = _lin_to_srgb(inv)
         inv = numpy.clip(inv, 0.0, 1.0)
         inv_i = numpy.round(0xffff * inv).astype(numpy.uint16)
+
+        if flip:
+            inv_i = numpy.flip(inv_i, axis=1)
 
         if linear:
             icc_filename = 'sRGB-elle-V2-g10.icc'

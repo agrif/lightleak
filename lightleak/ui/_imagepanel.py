@@ -207,6 +207,8 @@ class SaveWorker(QtCore.QObject):
         im: lightleak.image.Image
         path: pathlib.Path
         save_inverted: bool
+        flip_inverted: bool
+        linear_inverted: bool
 
     output_busy = QtCore.Signal(SaveParams)
 
@@ -226,7 +228,11 @@ class SaveWorker(QtCore.QObject):
         try:
             params.im.save(params.path)
             if params.save_inverted and params.im.inverted is not None:
-                params.im.save_inverted(params.path)
+                params.im.save_inverted(
+                    params.path,
+                    linear=params.linear_inverted,
+                    flip=params.flip_inverted,
+                )
         finally:
             self.output_busy.emit(False)
 
@@ -270,11 +276,14 @@ class ImagePanel(QtWidgets.QWidget):
 
         layout.addSpacing(20)
 
-        neg_box = QtWidgets.QGroupBox('Negatives')
-        layout.addWidget(neg_box)
+        self._neg_box = QtWidgets.QGroupBox('Negatives')
+        self._neg_box.setCheckable(True)
+        self._neg_box.setChecked(False)
+        self._neg_box.toggled.connect(self._set_enableds)
+        layout.addWidget(self._neg_box)
 
         neg_layout = QtWidgets.QVBoxLayout()
-        neg_box.setLayout(neg_layout)
+        self._neg_box.setLayout(neg_layout)
 
         gamma_layout = QtWidgets.QHBoxLayout()
         neg_layout.addLayout(gamma_layout)
@@ -308,9 +317,24 @@ class ImagePanel(QtWidgets.QWidget):
         self._unexposed.canceled.connect(self._cancel_image_pick)
         neg_layout.addWidget(self._unexposed)
 
-        self._save_inverted = QtWidgets.QCheckBox('Save Inverted')
+        layout.addSpacing(20)
+
+        self._save_inverted = QtWidgets.QGroupBox('Save Inverted')
+        self._save_inverted.setCheckable(True)
         self._save_inverted.setChecked(True)
-        neg_layout.addWidget(self._save_inverted)
+        self._save_inverted.toggled.connect(self._set_enableds)
+        layout.addWidget(self._save_inverted)
+
+        save_inverted_layout = QtWidgets.QVBoxLayout()
+        self._save_inverted.setLayout(save_inverted_layout)
+
+        self._flip_inverted = QtWidgets.QCheckBox('Flip Horizontally')
+        self._flip_inverted.setChecked(True)
+        save_inverted_layout.addWidget(self._flip_inverted)
+
+        self._linear_inverted = QtWidgets.QCheckBox('Linear Space')
+        self._linear_inverted.setChecked(True)
+        save_inverted_layout.addWidget(self._linear_inverted)
 
         layout.addStretch()
 
@@ -345,7 +369,9 @@ class ImagePanel(QtWidgets.QWidget):
                 self._image_type_buttons[0].setChecked(True)
 
         self._save_inverted.setEnabled(
-            bool(self._image) and self._image.inverted is not None)
+            bool(self._image) and self._image.inverted is not None and
+            self._neg_box.isChecked(),
+        )
 
     @QtCore.Slot(lightleak.image.Image)
     def set_image(self, image):
@@ -361,7 +387,10 @@ class ImagePanel(QtWidgets.QWidget):
         self._start_save_image.emit(SaveWorker.SaveParams(
             im=self._image,
             path=path,
-            save_inverted=self._save_inverted.isChecked(),
+            save_inverted=self._save_inverted.isChecked() and \
+                self._save_inverted.isEnabled(),
+            flip_inverted=self._flip_inverted.isChecked(),
+            linear_inverted=self._linear_inverted.isChecked(),
         ))
 
     def _set_flat_field(self, checked):
