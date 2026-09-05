@@ -87,7 +87,7 @@ class FileSelect(QtWidgets.QWidget):
             functools.partial(self.step_input, -1))
         self._input.right.clicked.connect(
             functools.partial(self.step_input, 1))
-        self._input.action.clicked.connect(self._reload_input)
+        self._input.action.clicked.connect(self.reload_input)
 
         self._output.open.clicked.connect(self._open_output)
         self._output.name.editingFinished.connect(self._set_output_name)
@@ -220,7 +220,7 @@ class FileSelect(QtWidgets.QWidget):
 
         self._set_enableds()
 
-    def _reload_input(self):
+    def reload_input(self):
         if self._input_paths:
             self._set_input_index(self._input.name.currentIndex())
 
@@ -242,6 +242,10 @@ class FileSelect(QtWidgets.QWidget):
             self._input.name.setCurrentText('')
 
         self._set_enableds()
+
+    @property
+    def input_has_next(self):
+        return self._input_i < len(self._input_paths) - 1
 
     def set_output(self, path):
         path = pathlib.Path(path).absolute()

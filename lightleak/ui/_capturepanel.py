@@ -167,8 +167,7 @@ class CapturePanel(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout()
         self.setLayout(layout)
-        margins = layout.getContentsMargins()
-        layout.setContentsMargins(margins[0], 0, margins[2], 0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         self._capture_button = QtWidgets.QPushButton('Capture')
         layout.addWidget(self._capture_button)
@@ -216,6 +215,9 @@ class CapturePanel(QtWidgets.QWidget):
     def set_input_busy(self, busy):
         self._input_busy = busy
         self._capture_button.setEnabled(not busy and self._connected)
+
+    def capture(self):
+        self._capture_button.clicked.emit()
 
     def _connect_clicked(self):
         if self._connected:
