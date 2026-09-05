@@ -360,8 +360,8 @@ class Image:
         # White point correction, assume that roughly white light
         # (same exposure in all primaries) created dmax, which changes
         # gamma so 10 ^ (gamma_p * dmax) is the same in all channels.
-        # Normalize so gamma[0] == gamma_p[0].
-        gamma_p = gamma / (dmax / dmax[0])
+        # Normalize so mean(1 / gamma_p) == 1 / gamma.
+        gamma_p = gamma / (dmax / numpy.mean(dmax))
 
         def process(rect, get_slice):
             # Film reacts to exposure E by creating density D according to
