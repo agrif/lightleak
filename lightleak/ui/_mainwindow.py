@@ -41,9 +41,9 @@ class MainWindow(QtWidgets.QMainWindow):
         stack.addWidget(self._file_select)
         stack.addLayout(panels)
 
-        panels.addWidget(self._capture_panel)
-        panels.addWidget(self._image_view)
         panels.addWidget(self._image_panel)
+        panels.addWidget(self._image_view)
+        panels.addWidget(self._capture_panel)
 
         root = QtWidgets.QWidget()
         root.setLayout(stack)
