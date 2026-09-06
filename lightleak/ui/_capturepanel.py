@@ -173,10 +173,10 @@ class CapturePanel(QtWidgets.QWidget):
         layout.addWidget(self._capture_button)
 
         layout.addSpacing(20)
-        settings_box = QtWidgets.QGroupBox('Capture Settings')
-        layout.addWidget(settings_box)
+        self._settings_box = QtWidgets.QGroupBox('Capture Settings')
+        layout.addWidget(self._settings_box)
         settings_layout = QtWidgets.QVBoxLayout()
-        settings_box.setLayout(settings_layout)
+        self._settings_box.setLayout(settings_layout)
 
         self._settings = {}
         for setting in SETTINGS:
@@ -241,6 +241,7 @@ class CapturePanel(QtWidgets.QWidget):
             self._connect_button.setText('Connect')
             self._connect_button.setEnabled(True)
             self._capture_button.setEnabled(False)
+            self._settings_box.setEnabled(False)
             for setting in self._settings.values():
                 for widget in setting.widgets:
                     widget.setEnabled(False)
@@ -261,6 +262,7 @@ class CapturePanel(QtWidgets.QWidget):
             self._connect_button.setText('Disconnect')
             self._connect_button.setEnabled(True)
             self._capture_button.setEnabled(not self._input_busy)
+            self._settings_box.setEnabled(True)
             for setting in self._settings.values():
                 for widget in setting.widgets:
                     widget.setEnabled(True)
