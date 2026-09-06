@@ -201,6 +201,32 @@ class ChecklistButtonModal(ChecklistButton):
             super()._on_click()
 
 
+class ScaleValidator(QtGui.QValidator):
+    def validate(self, text, pos):
+        text = text.strip()
+        if not text:
+            return QtGui.QValidator.State.Intermediate
+        percent = False
+        if text.endswith('%'):
+            text = text[:-1]
+            percent = True
+
+        try:
+            float(text)
+        except ValueError:
+            return QtGui.QValidator.State.Invalid
+        if percent:
+            return QtGui.QValidator.State.Acceptable
+        else:
+            return QtGui.QValidator.State.Intermediate
+
+    def fixup(self, text):
+        text = text.strip()
+        if not text.endswith('%'):
+            return text + '%'
+        return text
+
+
 class SaveWorker(QtCore.QObject):
     @dataclasses.dataclass
     class SaveParams:
@@ -238,6 +264,8 @@ class SaveWorker(QtCore.QObject):
 
 
 class ImagePanel(QtWidgets.QWidget):
+    scale_changed = QtCore.Signal(float)
+    scale_to_fit = QtCore.Signal()
     image_changed = QtCore.Signal(PIL.Image.Image)
     start_image_pick = QtCore.Signal(bool)
     image_flipped = QtCore.Signal(bool)
@@ -263,11 +291,40 @@ class ImagePanel(QtWidgets.QWidget):
         margins = layout.getContentsMargins()
         layout.setContentsMargins(margins[0], 0, margins[2], 0)
 
+        scale_layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(QtWidgets.QLabel('Scale'))
+        layout.addLayout(scale_layout)
+        self._scale = QtWidgets.QComboBox()
+        scale_layout.addWidget(self._scale)
+        self._scale.textActivated.connect(self._scale_changed)
+        self._scale.setEditable(True)
+        self._scale.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
+        self._scale.setValidator(ScaleValidator())
+        self._scale.setCompleter(None)
+        nice_ticks = [1.0, 1.25, 1.5]
+        for base, nice in [(b, n) for b in range(-3, 4) for n in nice_ticks]:
+            scale = nice * 2.0 ** base
+            self._scale.addItem(f'{int(round(scale * 100))}%')
+        self._scale.addItem(f'{int(round(100 * 2.0 ** (base + 1)))}%')
+        self._scale.setCurrentText('100%')
+
+        self._scale_fit_but = QtWidgets.QPushButton('Fit')
+        self._scale_fit_but.setMaximumWidth(30)
+        self._scale_fit_but.clicked.connect(self.scale_to_fit)
+        scale_layout.addWidget(self._scale_fit_but)
+        self._scale_100_but = QtWidgets.QPushButton('1:1')
+        self._scale_100_but.setMaximumWidth(30)
+        self._scale_100_but.clicked.connect(lambda: self._scale_changed(1.0))
+        scale_layout.addWidget(self._scale_100_but)
+
+        layout.addSpacing(10)
+
         display_box = QtWidgets.QGroupBox('Image Preview')
         layout.addWidget(display_box)
 
         display_layout = QtWidgets.QVBoxLayout()
         display_box.setLayout(display_layout)
+        display_layout.setSpacing(0)
         self._image_type_buttons = []
         for ty in IMAGE_TYPES:
             radio = QtWidgets.QRadioButton(ty.label)
@@ -287,7 +344,7 @@ class ImagePanel(QtWidgets.QWidget):
         histogram.toggled.connect(self.image_histogram)
         display_layout.addWidget(histogram)
 
-        layout.addSpacing(20)
+        layout.addSpacing(10)
 
         self._neg_box = QtWidgets.QGroupBox('Negatives')
         self._neg_box.setCheckable(True)
@@ -330,7 +387,7 @@ class ImagePanel(QtWidgets.QWidget):
         self._unexposed.canceled.connect(self._cancel_image_pick)
         neg_layout.addWidget(self._unexposed)
 
-        layout.addSpacing(20)
+        layout.addSpacing(10)
 
         self._save_inverted = QtWidgets.QGroupBox('Save Inverted')
         self._save_inverted.setCheckable(True)
@@ -340,6 +397,7 @@ class ImagePanel(QtWidgets.QWidget):
 
         save_inverted_layout = QtWidgets.QVBoxLayout()
         self._save_inverted.setLayout(save_inverted_layout)
+        save_inverted_layout.setSpacing(0)
 
         self._flip_inverted = QtWidgets.QCheckBox('Flip Horizontally')
         self._flip_inverted.setChecked(True)
@@ -356,6 +414,14 @@ class ImagePanel(QtWidgets.QWidget):
 
     def stop(self):
         self._worker.stop()
+
+    def set_scale(self, scale):
+        self._scale.setCurrentText(f'{int(round(scale * 100))}%')
+
+    def _scale_changed(self, scale):
+        if isinstance(scale, str):
+            scale = float(scale.strip().rstrip('%')) / 100.0
+        self.scale_changed.emit(scale)
 
     def _set_image_type(self, ty, checked):
         if not checked:
@@ -374,6 +440,9 @@ class ImagePanel(QtWidgets.QWidget):
     def _set_enableds(self):
         for w in [self._flat_field, self._unexposed, self._exposed]:
             w.setEnabled(bool(self._image) and not self._input_busy)
+
+        for w in [self._scale, self._scale_fit_but, self._scale_100_but]:
+            w.setEnabled(bool(self._image))
 
         for ty, radio in zip(IMAGE_TYPES, self._image_type_buttons):
             en = ty.enabled(self._image)
