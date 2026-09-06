@@ -6,7 +6,9 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 class ImageView(QtWidgets.QGraphicsView):
     # per mouse wheel degree, wheels usually have detents at 15 deg
-    scale_factor = 1.25 ** (1 / 15)
+    _scale_factor = 1.25 ** (1 / 15)
+    # mouse wheel events use 8 steps per degree
+    _steps_per_degree = 8
 
     image_picked = QtCore.Signal(int, int, int, int)
 
@@ -90,25 +92,26 @@ class ImageView(QtWidgets.QGraphicsView):
             self.set_scale(1)
 
     def wheelEvent(self, event):
-        step_per_degree = 8
         step = event.angleDelta().y()
         if not step:
             return
 
-        zoom = max(-10 * 15 * step_per_degree, self._zoom + int(step))
+        zoom = max(-10 * 15 * self._steps_per_degree, self._zoom + int(step))
         if zoom == self._zoom:
             return
 
         self._zoom = zoom
         if zoom:
-            factor = self.scale_factor ** (step / step_per_degree)
+            factor = self._scale_factor ** (step / self._steps_per_degree)
             self.scale(factor, factor)
         else:
-            self.set_scale(self.scale_factor ** (zoom / step_per_degree))
+            self.set_scale(
+                self._scale_factor ** (zoom / self._steps_per_degree))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.set_scale(self.scale_factor ** self._zoom)
+        self.set_scale(
+            self._scale_factor ** (self._zoom / self._steps_per_degree))
 
     @QtCore.Slot()
     def start_image_pick(self, start):
