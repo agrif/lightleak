@@ -10,13 +10,14 @@ class ImageView(QtWidgets.QGraphicsView):
     # mouse wheel events use 8 steps per degree
     _steps_per_degree = 8
 
+    scaled = QtCore.Signal(float)
     image_picked = QtCore.Signal(int, int, int, int)
 
     def __init__(self):
         super().__init__()
 
         self._has_image = False
-        self._zoom = 0
+        self._scale = 1.0
         self._flipped = False
 
         self._scene = QtWidgets.QGraphicsScene(self)
@@ -41,35 +42,38 @@ class ImageView(QtWidgets.QGraphicsView):
         )
 
         self.setBackgroundBrush(QtGui.QBrush(QtGui.QColor(20, 20, 20)))
-        self.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
 
         self._rubber_band = None
         self.rubberBandChanged.connect(self._rubber_band_changed)
 
     def set_scale(self, scale):
-        rect = QtCore.QRectF(self._image.pixmap().rect())
-        if not rect or rect.isNull():
+        scale = min(max(scale, 1e-2), 1e2)
+
+        if self._has_image:
+            self.resetTransform()
+            if self._flipped:
+                self.scale(-scale, scale)
+            else:
+                self.scale(scale, scale)
+
+        if scale == self._scale:
             return
 
-        self.setSceneRect(rect)
-        if not self._has_image:
-            return
+        self._scale = scale
+        self.scaled.emit(scale)
 
-        unity = self.transform().mapRect(QtCore.QRectF(0, 0, 1, 1))
-        self.scale(1 / unity.width(), 1 / unity.height())
+    def scale_to_fit(self):
+        scene = self.sceneRect()
         view = self.viewport().rect()
-        scene = self.transform().mapRect(rect)
-        factor = min(
+        scale = min(
             view.width() / scene.width(),
             view.height() / scene.height(),
         )
-        factor *= scale
-        self.scale(factor, factor)
+        self.set_scale(scale)
 
     def set_flipped(self, flipped):
-        if flipped != self._flipped:
-            self.scale(-1, 1)
         self._flipped = flipped
+        self.set_scale(self._scale)
 
     @QtCore.Slot(PIL.Image.Image)
     def set_image(self, im):
@@ -87,31 +91,24 @@ class ImageView(QtWidgets.QGraphicsView):
             self._has_image = False
             self._image.setPixmap(QtGui.QPixmap())
 
+        self._scene.setSceneRect(self._image.pixmap().rect())
+
         if not had_image:
-            self._zoom = 0
-            self.set_scale(1)
+            self.scale_to_fit()
 
     def wheelEvent(self, event):
         step = event.angleDelta().y()
         if not step:
             return
 
-        zoom = max(-10 * 15 * self._steps_per_degree, self._zoom + int(step))
-        if zoom == self._zoom:
-            return
+        scale = self._scale
+        scale *= self._scale_factor ** (step / self._steps_per_degree)
 
-        self._zoom = zoom
-        if zoom:
-            factor = self._scale_factor ** (step / self._steps_per_degree)
-            self.scale(factor, factor)
-        else:
-            self.set_scale(
-                self._scale_factor ** (zoom / self._steps_per_degree))
+        self.set_scale(scale)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.set_scale(
-            self._scale_factor ** (self._zoom / self._steps_per_degree))
+        self.set_scale(self._scale)
 
     @QtCore.Slot()
     def start_image_pick(self, start):
