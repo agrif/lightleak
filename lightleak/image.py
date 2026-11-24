@@ -450,15 +450,12 @@ class Image:
     def inverted_preview(self):
         return self._preview_linear(self.inverted)
 
-    def save_inverted(self, path, linear=True, flip=False):
-        inv = self.inverted.copy()
+    @classmethod
+    def _save_png(cls, data, path, linear=True):
         if not linear:
-            inv = _lin_to_srgb(inv)
-        inv = numpy.clip(inv, 0.0, 1.0)
-        inv_i = numpy.round(0xffff * inv).astype(numpy.uint16)
-
-        if flip:
-            inv_i = numpy.flip(inv_i, axis=1)
+            data = _lin_to_srgb(data)
+        data = numpy.clip(data, 0.0, 1.0)
+        data_i = numpy.round(0xffff * data).astype(numpy.uint16)
 
         if linear:
             icc_filename = 'sRGB-elle-V2-g10.icc'
@@ -474,13 +471,19 @@ class Image:
         icc_chunk = (b'iCCP', icc_name + b'\0\0' + zlib.compress(icc))
 
         w = PngChunkWriter(
-            width=self.width,
-            height=self.height,
+            width=data.shape[1],
+            height=data.shape[0],
             bitdepth=16,
             greyscale=False,
             gamma=gamma,
             extra_chunks=[icc_chunk],
         )
 
-        with open(str(path) + '.inv.png', 'wb') as f:
-            w.write_array(f, inv_i.flatten('C'))
+        with open(path, 'wb') as f:
+            w.write_array(f, data_i.flatten('C'))
+
+    def save_inverted(self, path, linear=True, flip=False):
+        inv = self.inverted.copy()
+        if flip:
+            inv = numpy.flip(inv, axis=1)
+        self._save_png(inv, str(path) + 'inv.png', linear=linear)
